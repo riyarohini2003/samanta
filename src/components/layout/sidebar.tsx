@@ -79,7 +79,10 @@ const employeeNav: NavSection[] = [
   },
   {
     label: "Me",
-    items: [{ href: "/employee/performance", label: "Performance", icon: BarChart3 }],
+    items: [
+      { href: "/employee/performance", label: "Performance", icon: BarChart3 },
+      { href: "/employee/settings", label: "Settings", icon: Settings },
+    ],
   },
 ];
 

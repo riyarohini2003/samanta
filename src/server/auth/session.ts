@@ -13,6 +13,7 @@ export type CurrentUser = {
   employeeCode: string;
   email: string | null;
   mobile: string;
+  photoUrl: string | null;
 };
 
 export async function createSession(user: User, meta: { ip?: string; userAgent?: string }) {
@@ -88,6 +89,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       employeeCode: true,
       email: true,
       mobile: true,
+      photoUrl: true,
       isActive: true,
       deletedAt: true,
     },

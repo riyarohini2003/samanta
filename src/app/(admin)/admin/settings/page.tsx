@@ -12,17 +12,21 @@ import {
   IntegrationsCard,
   AuditPolicyCard,
 } from "./_components/settings-forms";
+import { ChangePasswordCard } from "@/features/settings/change-password-card";
+import { ProfilePhotoCard } from "@/features/settings/profile-photo-card";
 import {
   Building2,
   Landmark,
   ShieldCheck,
   Plug,
   FileClock,
+  UserCog,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 const sections = [
+  { id: "account", label: "Account", icon: UserCog },
   { id: "organization", label: "Organization", icon: Building2 },
   { id: "loan-policy", label: "Loan policy", icon: Landmark },
   { id: "security", label: "Security", icon: ShieldCheck },
@@ -87,6 +91,11 @@ export default async function SettingsPage() {
         </aside>
 
         <div className="space-y-6">
+          <section id="account" className="scroll-mt-20 space-y-6">
+            <ProfilePhotoCard initialUrl={me.photoUrl} />
+            <ChangePasswordCard />
+          </section>
+
           <section id="organization" className="scroll-mt-20">
             <OrganizationCard value={settings.organization} />
           </section>

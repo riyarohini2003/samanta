@@ -1,13 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
-import { randomUUID } from "crypto";
-import path from "path";
-import { mkdir, writeFile } from "fs/promises";
+import { NextRequest } from "next/server";
 import { requireUser, AuthError } from "@/server/auth/session";
+import { uploadBuffer } from "@/lib/cloudinary";
 import { ok, badRequest, unauthorized, serverError } from "@/lib/api";
 
 export const runtime = "nodejs";
 
 const MAX_BYTES = 8 * 1024 * 1024; // 8 MB
+
 const ALLOWED_MIME = new Set([
   "image/jpeg",
   "image/jpg",
@@ -16,34 +15,19 @@ const ALLOWED_MIME = new Set([
   "image/gif",
   "application/pdf",
 ]);
+
 const ALLOWED_FOLDERS = new Set([
   "customers",
   "customer-docs",
   "loan-docs",
   "signatures",
+  "profile-photos",
 ]);
-
-function extFromMime(mime: string) {
-  switch (mime) {
-    case "image/jpeg":
-    case "image/jpg":
-      return "jpg";
-    case "image/png":
-      return "png";
-    case "image/webp":
-      return "webp";
-    case "image/gif":
-      return "gif";
-    case "application/pdf":
-      return "pdf";
-    default:
-      return "bin";
-  }
-}
 
 export async function POST(req: NextRequest) {
   try {
     await requireUser();
+
     const form = await req.formData();
     const file = form.get("file");
     const folderRaw = String(form.get("folder") || "customers");
@@ -61,15 +45,15 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const ext = extFromMime(type);
-    const name = `${Date.now()}-${randomUUID()}.${ext}`;
 
-    const dir = path.join(process.cwd(), "public", "uploads", folder);
-    await mkdir(dir, { recursive: true });
-    await writeFile(path.join(dir, name), buffer);
+    const result = await uploadBuffer(buffer, folder);
 
-    const url = `/uploads/${folder}/${name}`;
-    return ok({ url, name, size: file.size, mime: type });
+    return ok({
+      url: result.secure_url,
+      publicId: result.public_id,
+      size: result.bytes,
+      format: result.format,
+    });
   } catch (e) {
     if (e instanceof AuthError) return unauthorized();
     return serverError(e);

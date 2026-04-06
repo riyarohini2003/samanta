@@ -12,6 +12,7 @@ function makeUser(overrides: Partial<CurrentUser>): CurrentUser {
     employeeCode: "EMP001",
     email: null,
     mobile: "9999999999",
+    photoUrl: null,
     ...overrides,
   };
 }
