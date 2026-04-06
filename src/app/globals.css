@@ -1,0 +1,220 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Surface + text */
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Brand */
+    --primary: 222 84% 52%;
+    --primary-foreground: 210 40% 98%;
+
+    /* Neutrals */
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 214 95% 93%;
+    --accent-foreground: 222 84% 30%;
+
+    /* Semantics */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 69% 35%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 38 92% 12%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+
+    /* Lines + focus */
+    --border: 214 32% 91%;
+    --input: 214 32% 88%;
+    --ring: 222 84% 52%;
+    --radius: 0.65rem;
+
+    /* Sidebar surface (slightly offset from background) */
+    --sidebar: 0 0% 100%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-border: 214 32% 91%;
+    --sidebar-accent: 214 95% 93%;
+    --sidebar-accent-foreground: 222 84% 30%;
+  }
+
+  .dark {
+    /* Surface + text — layered dark grays with a cool undertone */
+    --background: 222 47% 5%;
+    --foreground: 210 40% 98%;
+    --card: 222 40% 11%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 40% 11%;
+    --popover-foreground: 210 40% 98%;
+
+    /* Brand — brighter blue for dark to keep accessible contrast */
+    --primary: 217 91% 62%;
+    --primary-foreground: 222 47% 11%;
+
+    /* Neutrals */
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 15%;
+    --muted-foreground: 215 20% 72%;
+    --accent: 217 33% 22%;
+    --accent-foreground: 210 40% 98%;
+
+    /* Semantics */
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 210 40% 98%;
+    --success: 152 65% 45%;
+    --success-foreground: 210 40% 98%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 38 92% 10%;
+    --info: 217 91% 62%;
+    --info-foreground: 210 40% 98%;
+
+    /* Lines + focus — brighter so cards separate clearly */
+    --border: 217 33% 24%;
+    --input: 217 33% 24%;
+    --ring: 217 91% 62%;
+
+    /* Sidebar — a touch darker than content for depth */
+    --sidebar: 222 47% 4%;
+    --sidebar-foreground: 210 40% 92%;
+    --sidebar-border: 217 33% 18%;
+    --sidebar-accent: 217 33% 20%;
+    --sidebar-accent-foreground: 210 40% 98%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * Tailwind's default `divide-*` color is gray-200, which is invisible on
+   * dark backgrounds. Route it through our `--border` token so every
+   * divider is theme-aware automatically. `:where()` keeps specificity at 0
+   * so explicit `divide-{color}-*` classes still win.
+   */
+  :where([class~="divide-y"], [class~="divide-y-0"], [class~="divide-x"], [class~="divide-x-0"]) > :not([hidden]) ~ :not([hidden]) {
+    border-color: hsl(var(--border));
+  }
+
+  /* Custom scrollbar — subtle, theme-aware */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 9999px;
+    border: 2px solid hsl(var(--background));
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.5);
+  }
+
+  /* Selection */
+  ::selection {
+    background-color: hsl(var(--primary) / 0.25);
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer components {
+  /* Subtle dotted grid for hero / auth backgrounds */
+  .bg-grid {
+    background-image: radial-gradient(
+      circle at 1px 1px,
+      hsl(var(--muted-foreground) / 0.18) 1px,
+      transparent 0
+    );
+    background-size: 24px 24px;
+  }
+  .bg-grid-fade {
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 40%, transparent 80%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 40%, transparent 80%);
+  }
+
+  /* Elevated card with a soft ring — works in both themes */
+  .card-elevated {
+    @apply border bg-card shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.04];
+  }
+}
+
+/* Status chip colors — distinct, accessible in both themes */
+.chip-pending {
+  @apply bg-yellow-100 text-yellow-800 border-yellow-200
+         dark:bg-yellow-500/15 dark:text-yellow-300 dark:border-yellow-500/30;
+}
+.chip-approved {
+  @apply bg-green-100 text-green-800 border-green-200
+         dark:bg-green-500/15 dark:text-green-300 dark:border-green-500/30;
+}
+.chip-rejected {
+  @apply bg-red-100 text-red-800 border-red-200
+         dark:bg-red-500/15 dark:text-red-300 dark:border-red-500/30;
+}
+.chip-due {
+  @apply bg-blue-100 text-blue-800 border-blue-200
+         dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/30;
+}
+.chip-overdue {
+  @apply bg-orange-100 text-orange-800 border-orange-200
+         dark:bg-orange-500/15 dark:text-orange-300 dark:border-orange-500/30;
+}
+.chip-paid {
+  @apply bg-green-100 text-green-800 border-green-200
+         dark:bg-green-500/15 dark:text-green-300 dark:border-green-500/30;
+}
+.chip-partial {
+  @apply bg-amber-100 text-amber-800 border-amber-200
+         dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30;
+}
+.chip-missed {
+  @apply bg-red-100 text-red-800 border-red-200
+         dark:bg-red-500/15 dark:text-red-300 dark:border-red-500/30;
+}
+.chip-active {
+  @apply bg-emerald-100 text-emerald-800 border-emerald-200
+         dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30;
+}
+.chip-closed {
+  @apply bg-slate-100 text-slate-700 border-slate-200
+         dark:bg-slate-500/15 dark:text-slate-300 dark:border-slate-500/30;
+}
+.chip-daily {
+  @apply bg-violet-100 text-violet-800 border-violet-200
+         dark:bg-violet-500/15 dark:text-violet-300 dark:border-violet-500/30;
+}
+.chip-weekly {
+  @apply bg-cyan-100 text-cyan-800 border-cyan-200
+         dark:bg-cyan-500/15 dark:text-cyan-300 dark:border-cyan-500/30;
+}
+.chip-monthly {
+  @apply bg-indigo-100 text-indigo-800 border-indigo-200
+         dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500/30;
+}

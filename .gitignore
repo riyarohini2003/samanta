@@ -1,0 +1,33 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# prisma
+prisma/*.db
+prisma/*.db-journal
+
+# misc
+.DS_Store
+*.log
+*.pem
+.vscode/
+.idea/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+cookies.txt
+.mongodb-data/
+.claude/
+
+# mobile
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/web-build/

@@ -1,0 +1,11 @@
+{
+  "buildCommand": "prisma generate && next build",
+  "framework": "nextjs",
+  "regions": ["bom1"],
+  "crons": [
+    {
+      "path": "/api/v1/cron/overdue",
+      "schedule": "0 2 * * *"
+    }
+  ]
+}

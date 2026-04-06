@@ -1,0 +1,408 @@
+// Samanta LMS - Prisma Schema
+// MongoDB + Prisma 5 (single-node replica set for transactions)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  BRANCH_MANAGER
+  EMPLOYEE
+}
+
+enum LoanType {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum LoanAppStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  SENT_BACK
+  DISBURSED
+  CLOSED
+}
+
+enum LoanStatus {
+  ACTIVE
+  CLOSED
+  OVERDUE
+  NPA
+  WRITTEN_OFF
+}
+
+enum InstallmentStatus {
+  PENDING
+  PAID
+  PARTIAL
+  MISSED
+  SKIPPED
+}
+
+enum PaymentMode {
+  CASH
+  UPI
+  BANK
+  CHEQUE
+}
+
+enum DisbursementMode {
+  CASH
+  BANK
+  UPI
+  CHEQUE
+}
+
+enum InvestmentStatus {
+  ACTIVE
+  MATURED
+  WITHDRAWN
+}
+
+// ─── Models ─────────────────────────────────────────────────────────────
+model User {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  employeeCode String    @unique
+  loginId      String    @unique
+  passwordHash String
+  name         String
+  email        String?   @unique
+  mobile       String
+  role         Role
+  branchId     String?   @db.ObjectId
+  branch       Branch?   @relation(fields: [branchId], references: [id])
+  address      String?
+  joiningDate  DateTime?
+  idProofUrl   String?
+  photoUrl     String?
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  applicationsCreated  LoanApplication[] @relation("CreatedBy")
+  applicationsReviewed LoanApplication[] @relation("ReviewedBy")
+  loansAssigned        LoanAccount[]     @relation("AssignedEmployee")
+  collectionsMade      Payment[]
+  auditLogs            AuditLog[]
+  sessions             Session[]
+  notifications        Notification[]
+  customersCreated     Customer[]        @relation("CustomerCreatedBy")
+
+  @@index([branchId, role, isActive])
+}
+
+model Session {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String   @db.ObjectId
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken String   @unique
+  userAgent    String?
+  ip           String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Branch {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  code          String    @unique
+  name          String
+  address       String
+  city          String
+  state         String
+  pincode       String
+  managerId     String?   @db.ObjectId
+  contactNumber String
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  users        User[]
+  customers    Customer[]
+  loans        LoanAccount[]
+  applications LoanApplication[]
+}
+
+model Customer {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  customerCode      String    @unique
+  fullName          String
+  fatherOrHusband   String?
+  mobile            String    @unique
+  altMobile         String?
+  aadhaar           String?   @unique
+  panOrTaxId        String?
+  dob               DateTime?
+  gender            String?
+  maritalStatus     String?
+  occupation        String?
+  monthlyIncome     Float?
+  currentAddress    String
+  permanentAddress  String?
+  guarantorName     String?
+  guarantorMobile   String?
+  guarantorRelation String?
+  referenceName     String?
+  referenceMobile   String?
+  bankName          String?
+  bankAccount       String?
+  ifsc              String?
+  nomineeName       String?
+  nomineeRelation   String?
+  photoUrl          String?
+  branchId          String    @db.ObjectId
+  branch            Branch    @relation(fields: [branchId], references: [id])
+  createdById       String    @db.ObjectId
+  createdBy         User      @relation("CustomerCreatedBy", fields: [createdById], references: [id])
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  documents    CustomerDocument[]
+  applications LoanApplication[]
+  loans        LoanAccount[]
+
+  @@index([branchId, fullName])
+}
+
+model CustomerDocument {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  customerId String   @db.ObjectId
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  type       String
+  url        String
+  uploadedAt DateTime @default(now())
+}
+
+model LoanApplication {
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  applicationNo     String        @unique
+  customerId        String        @db.ObjectId
+  customer          Customer      @relation(fields: [customerId], references: [id])
+  branchId          String        @db.ObjectId
+  branch            Branch        @relation(fields: [branchId], references: [id])
+  loanType          LoanType
+  principal         Float
+  interestRate      Float
+  processingFee     Float       @default(0)
+  tenureCount       Int
+  installmentAmount Float
+  totalPayable      Float
+  interestAmount    Float
+  startDate         DateTime
+  maturityDate      DateTime
+  purpose           String?
+  notes             String?
+  status            LoanAppStatus @default(DRAFT)
+  createdById       String        @db.ObjectId
+  createdBy         User          @relation("CreatedBy", fields: [createdById], references: [id])
+  reviewedById      String?       @db.ObjectId
+  reviewedBy        User?         @relation("ReviewedBy", fields: [reviewedById], references: [id])
+  reviewRemark      String?
+  reviewedAt        DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  documents   LoanAppDocument[]
+  loanAccount LoanAccount?
+
+  @@index([branchId, status])
+  @@index([createdById, status])
+  @@index([customerId])
+}
+
+model LoanAppDocument {
+  id            String          @id @default(auto()) @map("_id") @db.ObjectId
+  applicationId String          @db.ObjectId
+  application   LoanApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  type          String
+  url           String
+  uploadedAt    DateTime        @default(now())
+}
+
+model LoanAccount {
+  id                 String           @id @default(auto()) @map("_id") @db.ObjectId
+  accountNo          String           @unique
+  applicationId      String           @unique @db.ObjectId
+  application        LoanApplication  @relation(fields: [applicationId], references: [id])
+  customerId         String           @db.ObjectId
+  customer           Customer         @relation(fields: [customerId], references: [id])
+  branchId           String           @db.ObjectId
+  branch             Branch           @relation(fields: [branchId], references: [id])
+  assignedEmployeeId String           @db.ObjectId
+  assignedEmployee   User             @relation("AssignedEmployee", fields: [assignedEmployeeId], references: [id])
+  loanType           LoanType
+  principal          Float
+  interestAmount     Float
+  totalPayable       Float
+  installmentAmount  Float
+  paidAmount         Float          @default(0)
+  pendingAmount      Float
+  overdueAmount      Float          @default(0)
+  penaltyAmount      Float          @default(0)
+  disbursedAt        DateTime
+  disbursementMode   DisbursementMode
+  startDate          DateTime
+  maturityDate       DateTime
+  nextDueDate        DateTime?
+  status             LoanStatus       @default(ACTIVE)
+  closedAt           DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  schedule RepaymentSchedule[]
+  payments Payment[]
+
+  @@index([branchId, status])
+  @@index([assignedEmployeeId, status])
+  @@index([nextDueDate])
+}
+
+// KEY COLLECTION for unified date-wise collection
+model RepaymentSchedule {
+  id            String            @id @default(auto()) @map("_id") @db.ObjectId
+  loanAccountId String            @db.ObjectId
+  loanAccount   LoanAccount       @relation(fields: [loanAccountId], references: [id], onDelete: Cascade)
+  installmentNo Int
+  dueDate       DateTime
+  dueAmount     Float
+  paidAmount    Float           @default(0)
+  status        InstallmentStatus @default(PENDING)
+  paidAt        DateTime?
+  penaltyAmount Float           @default(0)
+
+  @@unique([loanAccountId, installmentNo])
+  @@index([dueDate, status])
+  @@index([loanAccountId, dueDate])
+}
+
+model Payment {
+  id             String      @id @default(auto()) @map("_id") @db.ObjectId
+  receiptNo      String      @unique
+  loanAccountId  String      @db.ObjectId
+  loanAccount    LoanAccount @relation(fields: [loanAccountId], references: [id])
+  scheduleId     String?     @db.ObjectId
+  amount         Float
+  penalty        Float     @default(0)
+  mode           PaymentMode
+  collectedById  String      @db.ObjectId
+  collectedBy    User        @relation(fields: [collectedById], references: [id])
+  collectedAt    DateTime    @default(now())
+  note           String?
+  geoLat         Float?
+  geoLng         Float?
+  clientRef      String?     @unique
+  isReversed     Boolean     @default(false)
+  reversedReason String?
+
+  @@index([collectedAt])
+  @@index([loanAccountId])
+  @@index([scheduleId])
+}
+
+model AuditLog {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String?  @db.ObjectId
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId, createdAt])
+}
+
+model Notification {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String    @db.ObjectId
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+}
+
+model Counter {
+  key   String @id @map("_id")
+  value Int    @default(0)
+}
+
+// ─── Investor & Investment ──────────────────────────────────────────
+model Investor {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  investorCode String    @unique
+  fullName     String
+  mobile       String    @unique
+  email        String?
+  pan          String?
+  address      String?
+  bankName     String?
+  bankAccount  String?
+  ifsc         String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  investments Investment[]
+
+  @@index([fullName])
+}
+
+model Investment {
+  id              String           @id @default(auto()) @map("_id") @db.ObjectId
+  investmentCode  String           @unique
+  investorId      String           @db.ObjectId
+  investor        Investor         @relation(fields: [investorId], references: [id])
+  principalAmount Float
+  interestRate    Float            // Annual ROI %
+  tenureMonths    Int
+  investmentDate  DateTime
+  maturityDate    DateTime
+  interestAmount  Float            // Calculated: P * R * T
+  totalReturn     Float            // principal + interest
+  paidAmount      Float            @default(0)
+  status          InvestmentStatus @default(ACTIVE)
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([investorId, status])
+  @@index([maturityDate])
+}
+
+// Generic key/value store for app-wide settings (organization profile, loan policy defaults,
+// security policy, integration credentials, audit policy, etc.). Each section is stored under
+// a well-known key with a JSON blob, so adding new settings never requires a schema change.
+model Setting {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+  updatedBy String?  @db.ObjectId
+}

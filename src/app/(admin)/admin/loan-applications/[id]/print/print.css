@@ -1,0 +1,232 @@
+/* Print-optimized A4 layout for loan application */
+
+.print-root {
+  background: #f4f4f4;
+  min-height: 100vh;
+  padding-bottom: 40px;
+  color: #111;
+}
+
+.a4-page {
+  background: #fff;
+  color: #111;
+  width: 210mm;
+  min-height: 297mm;
+  margin: 16px auto;
+  padding: 14mm 14mm 12mm 14mm;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-size: 11px;
+  line-height: 1.45;
+  page-break-after: always;
+}
+.a4-page:last-child {
+  page-break-after: auto;
+}
+
+.pa-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 2px solid #111;
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+.pa-company {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+.pa-muted {
+  color: #555;
+  font-size: 10px;
+}
+.pa-meta {
+  text-align: right;
+  font-size: 10px;
+  line-height: 1.7;
+}
+.pa-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  margin-bottom: 4px;
+}
+
+.pa-section {
+  margin-bottom: 12px;
+  break-inside: avoid;
+}
+.pa-section-title {
+  background: #111;
+  color: #fff;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.pa-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  gap: 16px;
+}
+.pa-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px 16px;
+}
+.pa-applicant {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px 16px;
+}
+
+.pa-row {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+  border-bottom: 1px dotted #ccc;
+  min-height: 34px;
+}
+.pa-row-wide {
+  grid-column: span 3;
+}
+.pa-row-label {
+  font-size: 9px;
+  color: #777;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.pa-row-value {
+  font-size: 11px;
+  font-weight: 500;
+  color: #111;
+  word-break: break-word;
+}
+
+.pa-photo-box {
+  width: 120px;
+  height: 150px;
+  border: 1.5px solid #111;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fafafa;
+}
+.pa-photo-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pa-photo-placeholder {
+  font-size: 9px;
+  color: #888;
+  text-align: center;
+  padding: 4px;
+}
+
+.pa-decl {
+  font-size: 10px;
+  text-align: justify;
+  color: #222;
+  margin: 0;
+}
+
+.pa-signatures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 36px;
+}
+.pa-sig {
+  text-align: center;
+  position: relative;
+}
+.pa-sig-line {
+  border-top: 1px solid #111;
+  margin-top: 50px;
+}
+.pa-sig-img {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-height: 48px;
+  max-width: 130px;
+}
+.pa-sig-label {
+  font-size: 10px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.pa-footer {
+  margin-top: 20px;
+  padding-top: 8px;
+  border-top: 1px solid #ccc;
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: #666;
+}
+
+.pa-doc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.pa-doc {
+  border: 1px solid #ccc;
+  padding: 6px;
+  break-inside: avoid;
+}
+.pa-doc-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  color: #555;
+}
+.pa-doc img {
+  width: 100%;
+  max-height: 110mm;
+  object-fit: contain;
+  display: block;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  /* Hide admin chrome (sidebar + topbar) so only the application prints */
+  body aside,
+  body > div > div > header {
+    display: none !important;
+  }
+  body > div {
+    padding-left: 0 !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  .print-root {
+    background: #fff;
+    padding: 0;
+  }
+  .a4-page {
+    box-shadow: none;
+    margin: 0;
+    width: auto;
+    min-height: auto;
+    padding: 10mm;
+  }
+  @page {
+    size: A4;
+    margin: 0;
+  }
+}

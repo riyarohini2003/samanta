@@ -1,0 +1,69 @@
+{
+  "branches": [
+    { "name": "Mumbai Central", "city": "Mumbai", "state": "Maharashtra", "pincode": "400001" },
+    { "name": "Pune Camp", "city": "Pune", "state": "Maharashtra", "pincode": "411001" },
+    { "name": "Nashik Road", "city": "Nashik", "state": "Maharashtra", "pincode": "422101" }
+  ],
+
+  "employeeFirstNames": ["Rahul", "Priya", "Amit", "Sneha", "Vikram", "Anjali", "Sanjay", "Meera"],
+  "employeeLastNames": ["Kumar", "Sharma", "Patel", "Singh", "Verma", "Joshi", "Rao", "Nair"],
+  "employeesPerBranch": 3,
+  "defaultEmployeePassword": "Employee@123",
+
+  "customerFirstNames": ["Ramesh", "Suresh", "Mahesh", "Rekha", "Sunita", "Kavita", "Deepak", "Rajesh", "Geeta", "Asha", "Vijay", "Neha", "Pooja", "Ravi", "Kiran"],
+  "customerLastNames": ["Kulkarni", "Deshmukh", "Jadhav", "Patil", "Bhosale", "Shinde", "Pawar", "More", "Sawant", "Gaikwad"],
+  "customersPerBranch": 15,
+  "occupations": ["Shopkeeper", "Farmer", "Driver", "Tailor", "Vegetable Vendor", "Mechanic"],
+  "customerIncomeRange": { "min": 10000, "max": 50000 },
+
+  "loanChance": 0.6,
+  "annualInterestRate": 24,
+  "loanTypes": {
+    "DAILY":   { "principalMin": 5000,  "principalMax": 20000,  "tenureCount": 100, "daysBackMin": 5,  "daysBackMax": 30  },
+    "WEEKLY":  { "principalMin": 10000, "principalMax": 50000,  "tenureCount": 20,  "daysBackMin": 14, "daysBackMax": 60  },
+    "MONTHLY": { "principalMin": 20000, "principalMax": 100000, "tenureCount": 12,  "daysBackMin": 30, "daysBackMax": 120 }
+  },
+  "paymentSkipChance": 0.6,
+
+  "defaultSettings": {
+    "organization": {
+      "companyName": "Samanta Finance",
+      "legalName": "",
+      "contactEmail": "",
+      "contactPhone": "",
+      "address": "",
+      "currency": "INR",
+      "website": "",
+      "gstin": ""
+    },
+    "loanPolicy": {
+      "defaultInterestRates": { "DAILY": 0.2, "WEEKLY": 1.5, "MONTHLY": 3 },
+      "defaultProcessingFeePct": 2,
+      "defaultPenaltyPerDay": 50,
+      "graceDays": 3,
+      "minPrincipal": 1000,
+      "maxPrincipal": 500000,
+      "autoCloseOnFullPayment": true
+    },
+    "security": {
+      "passwordMinLength": 8,
+      "requireUppercase": true,
+      "requireNumber": true,
+      "requireSymbol": false,
+      "forcePasswordChangeDays": 90,
+      "maxFailedLoginAttempts": 5,
+      "sessionIdleTimeoutMinutes": 60,
+      "require2FAForAdmins": false
+    },
+    "integrations": {
+      "sms": { "provider": "", "senderId": "", "apiKey": "", "enabled": false },
+      "whatsapp": { "provider": "", "phoneNumberId": "", "apiKey": "", "enabled": false },
+      "smtp": { "host": "", "port": 587, "user": "", "password": "", "fromAddress": "", "enabled": false }
+    },
+    "auditPolicy": {
+      "retentionDays": 365,
+      "logReadActions": false,
+      "alertOnDestructiveAction": true
+    }
+  }
+}
