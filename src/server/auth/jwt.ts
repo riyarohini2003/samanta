@@ -7,8 +7,18 @@ function requireEnv(name: string): string {
   return val;
 }
 
-const accessSecret = new TextEncoder().encode(requireEnv("JWT_ACCESS_SECRET"));
-const refreshSecret = new TextEncoder().encode(requireEnv("JWT_REFRESH_SECRET"));
+let _accessSecret: Uint8Array | null = null;
+let _refreshSecret: Uint8Array | null = null;
+
+function getAccessSecret() {
+  if (!_accessSecret) _accessSecret = new TextEncoder().encode(requireEnv("JWT_ACCESS_SECRET"));
+  return _accessSecret;
+}
+
+function getRefreshSecret() {
+  if (!_refreshSecret) _refreshSecret = new TextEncoder().encode(requireEnv("JWT_REFRESH_SECRET"));
+  return _refreshSecret;
+}
 
 const ACCESS_TTL = Number(process.env.JWT_ACCESS_TTL_SECONDS || 900);
 const REFRESH_TTL = Number(process.env.JWT_REFRESH_TTL_SECONDS || 2_592_000);
@@ -27,7 +37,7 @@ export async function signAccessToken(
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${ACCESS_TTL}s`)
-    .sign(accessSecret);
+    .sign(getAccessSecret());
 }
 
 export async function signRefreshToken(sub: string): Promise<string> {
@@ -35,12 +45,12 @@ export async function signRefreshToken(sub: string): Promise<string> {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${REFRESH_TTL}s`)
-    .sign(refreshSecret);
+    .sign(getRefreshSecret());
 }
 
 export async function verifyAccessToken(token: string): Promise<AccessPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, accessSecret);
+    const { payload } = await jwtVerify(token, getAccessSecret());
     return payload as AccessPayload;
   } catch {
     return null;
@@ -49,7 +59,7 @@ export async function verifyAccessToken(token: string): Promise<AccessPayload | 
 
 export async function verifyRefreshToken(token: string): Promise<{ sub: string } | null> {
   try {
-    const { payload } = await jwtVerify(token, refreshSecret);
+    const { payload } = await jwtVerify(token, getRefreshSecret());
     return { sub: payload.sub as string };
   } catch {
     return null;
