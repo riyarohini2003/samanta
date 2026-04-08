@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/server/db";
 import dayjs from "dayjs";
+import { calculateAndApplyPenalties } from "@/server/services/penalty-service";
 
 const OVERDUE_DAYS = Number(process.env.OVERDUE_THRESHOLD_DAYS || 1);
 const NPA_DAYS = Number(process.env.NPA_THRESHOLD_DAYS || 90);
@@ -65,10 +66,15 @@ export async function GET(req: NextRequest) {
     if (status === "NPA") npaCount++;
   }
 
+  // Calculate and apply penalties on overdue installments
+  const penaltyResult = await calculateAndApplyPenalties();
+
   return NextResponse.json({
     ok: true,
     missed: missedResult.count,
     overdue: overdueCount,
     npa: npaCount,
+    penaltiesUpdated: penaltyResult.updated,
+    totalPenalty: penaltyResult.totalPenalty,
   });
 }

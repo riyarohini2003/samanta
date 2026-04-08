@@ -26,6 +26,13 @@ export async function POST(req: NextRequest) {
     }
 
     const calc = calculateLoan({ ...l, startDate: l.startDate });
+    const isDraft = l.asDraft === true;
+    const isSelfCalc = l.selfCalculate === true;
+
+    // When self-calculate mode is used, prefer user-provided values over calculated ones
+    const finalInterest = isSelfCalc && l.interestAmount != null ? l.interestAmount : calc.interestAmount;
+    const finalTotal = isSelfCalc && l.totalPayable != null ? l.totalPayable : calc.totalPayable;
+    const finalInstallment = l.installmentAmount ?? (isSelfCalc ? Math.round(finalTotal / l.tenureCount) : calc.installmentAmount);
 
     const result = await prisma.$transaction(async (tx) => {
       const customerCode = await nextCustomerCode(tx);
@@ -54,14 +61,14 @@ export async function POST(req: NextRequest) {
           interestRate: l.interestRate,
           processingFee: calc.processingFee,
           tenureCount: l.tenureCount,
-          installmentAmount: l.installmentAmount ?? calc.installmentAmount,
-          totalPayable: calc.totalPayable,
-          interestAmount: calc.interestAmount,
+          installmentAmount: finalInstallment,
+          totalPayable: finalTotal,
+          interestAmount: finalInterest,
           startDate: calc.startDate,
           maturityDate: calc.maturityDate,
           purpose: l.purpose,
           notes: l.notes,
-          status: "SUBMITTED",
+          status: isDraft ? "DRAFT" : "SUBMITTED",
           createdById: me.id,
           documents: l.documents && l.documents.length
             ? { create: l.documents.map((d) => ({ type: d.type, url: d.url })) }
@@ -74,7 +81,7 @@ export async function POST(req: NextRequest) {
 
     await writeAudit({
       userId: me.id,
-      action: "INTAKE_SUBMITTED",
+      action: isDraft ? "INTAKE_DRAFTED" : "INTAKE_SUBMITTED",
       entityType: "LoanApplication",
       entityId: result.application.id,
       after: result,

@@ -5,11 +5,8 @@ import { getCurrentUser } from "@/server/auth/session";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { StatusBadge } from "@/components/ui/badge";
 import { Plus } from "lucide-react";
-import { fmtDate } from "@/lib/dayjs";
-import { formatMoney } from "@/lib/formatters";
+import EmployeeApplicationsTable from "./applications-table";
 
 export const dynamic = "force-dynamic";
 
@@ -39,35 +36,7 @@ export default async function EmployeeAppsPage() {
       />
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>App No</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Installment</TableHead>
-                <TableHead>Submitted</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {apps.map((a) => (
-                <TableRow key={a.id}>
-                  <TableCell className="font-mono text-xs">{a.applicationNo}</TableCell>
-                  <TableCell className="font-medium">{a.customer.fullName}</TableCell>
-                  <TableCell>{a.loanType}</TableCell>
-                  <TableCell>{formatMoney(a.principal)}</TableCell>
-                  <TableCell>{formatMoney(a.installmentAmount)}</TableCell>
-                  <TableCell>{fmtDate(a.createdAt)}</TableCell>
-                  <TableCell><StatusBadge status={a.status} /></TableCell>
-                </TableRow>
-              ))}
-              {apps.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="py-12 text-center text-muted-foreground">No applications yet.</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
+          <EmployeeApplicationsTable apps={apps} />
         </CardContent>
       </Card>
     </div>

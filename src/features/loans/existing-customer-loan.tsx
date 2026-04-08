@@ -208,13 +208,15 @@ export function ExistingCustomerLoan({
       .catch(() => {});
   }, [debounced, step]);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const [savingDraft, setSavingDraft] = useState(false);
+
+  async function doSubmit(asDraft: boolean) {
     if (!selectedCustomerId || !selectedLoanType) {
       toast.error("Invalid state — please start over");
       return;
     }
-    setLoading(true);
+    if (asDraft) setSavingDraft(true);
+    else setLoading(true);
     try {
       const res = await fetch("/api/v1/loan-applications", {
         method: "POST",
@@ -223,6 +225,7 @@ export function ExistingCustomerLoan({
           customerId: selectedCustomerId,
           loanType: selectedLoanType,
           ...form,
+          asDraft,
         }),
       });
       const json = await res.json();
@@ -230,12 +233,22 @@ export function ExistingCustomerLoan({
         toast.error(json.error || "Failed to submit application");
         return;
       }
-      toast.success(`Application ${json.data.applicationNo} submitted for review`);
+      toast.success(
+        asDraft
+          ? `Draft ${json.data.applicationNo} saved`
+          : `Application ${json.data.applicationNo} submitted for review`
+      );
       router.push(returnTo);
       router.refresh();
     } finally {
       setLoading(false);
+      setSavingDraft(false);
     }
+  }
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await doSubmit(false);
   }
 
   const tenureUnitLabel =
@@ -592,7 +605,7 @@ export function ExistingCustomerLoan({
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Start Date *</Label>
+                  <Label>Application Date *</Label>
                   <Input required type="date" value={form.startDate} onChange={(e) => setF("startDate", e.target.value)} />
                 </div>
                 <div />
@@ -610,7 +623,15 @@ export function ExistingCustomerLoan({
                   <Button type="button" variant="outline" onClick={goBackToEligibility}>
                     <ArrowLeft className="mr-1 h-4 w-4" /> Back
                   </Button>
-                  <Button type="submit" disabled={loading}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={loading || savingDraft}
+                    onClick={() => doSubmit(true)}
+                  >
+                    {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save as Draft"}
+                  </Button>
+                  <Button type="submit" disabled={loading || savingDraft}>
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit for Review"}
                   </Button>
                 </div>

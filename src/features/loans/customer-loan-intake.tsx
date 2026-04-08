@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PhotoCapture } from "@/components/ui/photo-capture";
 import { DocumentSlot, type UploadedDoc } from "@/components/ui/document-upload";
 import { formatMoney } from "@/lib/formatters";
@@ -66,6 +67,7 @@ export function CustomerLoanIntake({
   });
 
   const [photoUrl, setPhotoUrl] = useState<string | undefined>(undefined);
+  const [sameAddress, setSameAddress] = useState(false);
 
   // Customer KYC doc slots
   const [aadhaarFront, setAadhaarFront] = useState<UploadedDoc | undefined>();
@@ -92,6 +94,9 @@ export function CustomerLoanIntake({
     notes: "",
   });
   const [emiManual, setEmiManual] = useState(false);
+  const [selfCalc, setSelfCalc] = useState(false);
+  const [manualInterest, setManualInterest] = useState("");
+  const [manualTotal, setManualTotal] = useState("");
 
   function setC<K extends keyof typeof customer>(k: K, v: string) {
     setCustomer((f) => ({ ...f, [k]: v }));
@@ -118,6 +123,7 @@ export function CustomerLoanIntake({
   );
 
   useEffect(() => {
+    if (selfCalc) return; // skip auto-calc in self-calculate mode
     if (!debounced.principal || !debounced.tenureCount) {
       setCalc(null);
       return;
@@ -137,7 +143,7 @@ export function CustomerLoanIntake({
         }
       })
       .catch(() => {});
-  }, [debounced, emiManual]);
+  }, [debounced, emiManual, selfCalc]);
 
   const customerDocs: UploadedDoc[] = [
     photoUrl ? { type: "PHOTO", url: photoUrl } : undefined,
@@ -151,13 +157,15 @@ export function CustomerLoanIntake({
     Boolean
   ) as UploadedDoc[];
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const [savingDraft, setSavingDraft] = useState(false);
+
+  async function doSubmit(asDraft: boolean) {
     if (!customer.branchId) {
       toast.error("Select a branch");
       return;
     }
-    setLoading(true);
+    if (asDraft) setSavingDraft(true);
+    else setLoading(true);
     try {
       const res = await fetch("/api/v1/intake", {
         method: "POST",
@@ -171,7 +179,15 @@ export function CustomerLoanIntake({
           loan: {
             ...loan,
             installmentAmount: loan.installmentAmount ? Number(loan.installmentAmount) : undefined,
+            ...(selfCalc
+              ? {
+                  selfCalculate: true,
+                  interestAmount: manualInterest ? Number(manualInterest) : undefined,
+                  totalPayable: manualTotal ? Number(manualTotal) : undefined,
+                }
+              : {}),
             documents: loanDocs,
+            asDraft,
           },
         }),
       });
@@ -181,13 +197,21 @@ export function CustomerLoanIntake({
         return;
       }
       toast.success(
-        `Application ${json.data.applicationNo} submitted for review`
+        asDraft
+          ? `Draft ${json.data.applicationNo} saved`
+          : `Application ${json.data.applicationNo} submitted for review`
       );
       router.push(successRedirect);
       router.refresh();
     } finally {
       setLoading(false);
+      setSavingDraft(false);
     }
+  }
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await doSubmit(false);
   }
 
   return (
@@ -255,10 +279,40 @@ export function CustomerLoanIntake({
 
             <Section title="Address">
               <Field wide label="Current Address *">
-                <Textarea required value={customer.currentAddress} onChange={(e) => setC("currentAddress", e.target.value)} />
+                <Textarea
+                  required
+                  value={customer.currentAddress}
+                  onChange={(e) => {
+                    setC("currentAddress", e.target.value);
+                    if (sameAddress) setC("permanentAddress", e.target.value);
+                  }}
+                />
               </Field>
+              <div className="md:col-span-3 flex items-center gap-2">
+                <Checkbox
+                  checked={sameAddress}
+                  onCheckedChange={(checked) => {
+                    setSameAddress(checked);
+                    if (checked) setC("permanentAddress", customer.currentAddress);
+                  }}
+                />
+                <label
+                  className="cursor-pointer text-sm"
+                  onClick={() => {
+                    const next = !sameAddress;
+                    setSameAddress(next);
+                    if (next) setC("permanentAddress", customer.currentAddress);
+                  }}
+                >
+                  Same as Current Address
+                </label>
+              </div>
               <Field wide label="Permanent Address">
-                <Textarea value={customer.permanentAddress} onChange={(e) => setC("permanentAddress", e.target.value)} />
+                <Textarea
+                  value={customer.permanentAddress}
+                  onChange={(e) => setC("permanentAddress", e.target.value)}
+                  disabled={sameAddress}
+                />
               </Field>
             </Section>
 
@@ -302,24 +356,57 @@ export function CustomerLoanIntake({
 
         <Card>
           <CardHeader>
-            <CardTitle>Loan Details</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Loan Details</CardTitle>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={selfCalc}
+                  onCheckedChange={(checked) => {
+                    setSelfCalc(checked);
+                    if (!checked) {
+                      setManualInterest("");
+                      setManualTotal("");
+                      setCalc(null); // will re-trigger auto-calc
+                    }
+                  }}
+                />
+                <label
+                  className="cursor-pointer text-sm font-medium"
+                  onClick={() => {
+                    const next = !selfCalc;
+                    setSelfCalc(next);
+                    if (!next) {
+                      setManualInterest("");
+                      setManualTotal("");
+                      setCalc(null);
+                    }
+                  }}
+                >
+                  Self Calculate
+                </label>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Interest Method *</Label>
-              <Select value={loan.interestMethod} onChange={(e) => setL("interestMethod", e.target.value)}>
-                <option value="SIMPLE">Simple Interest</option>
-                <option value="COMPOUND">Compound Interest</option>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Rate Period *</Label>
-              <Select value={loan.ratePeriod} onChange={(e) => setL("ratePeriod", e.target.value)}>
-                <option value="WEEKLY">Weekly</option>
-                <option value="MONTHLY">Monthly</option>
-                <option value="ANNUAL">Annually</option>
-              </Select>
-            </div>
+            {!selfCalc && (
+              <>
+                <div className="space-y-2">
+                  <Label>Interest Method *</Label>
+                  <Select value={loan.interestMethod} onChange={(e) => setL("interestMethod", e.target.value)}>
+                    <option value="SIMPLE">Simple Interest</option>
+                    <option value="COMPOUND">Compound Interest</option>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Rate Period *</Label>
+                  <Select value={loan.ratePeriod} onChange={(e) => setL("ratePeriod", e.target.value)}>
+                    <option value="WEEKLY">Weekly</option>
+                    <option value="MONTHLY">Monthly</option>
+                    <option value="ANNUAL">Annually</option>
+                  </Select>
+                </div>
+              </>
+            )}
             <div className="space-y-2">
               <Label>Principal Amount *</Label>
               <Input required type="number" value={loan.principal} onChange={(e) => setL("principal", e.target.value)} />
@@ -344,20 +431,62 @@ export function CustomerLoanIntake({
               <Label>Processing Fee</Label>
               <Input type="number" value={loan.processingFee} onChange={(e) => setL("processingFee", e.target.value)} />
             </div>
+
+            {selfCalc ? (
+              <>
+                <div className="space-y-2">
+                  <Label>Interest Amount *</Label>
+                  <Input
+                    required
+                    type="number"
+                    placeholder="Enter interest amount"
+                    value={manualInterest}
+                    onChange={(e) => {
+                      setManualInterest(e.target.value);
+                      if (loan.principal && e.target.value) {
+                        setManualTotal(String(Number(loan.principal) + Number(e.target.value)));
+                      }
+                    }}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Total Payable *</Label>
+                  <Input
+                    required
+                    type="number"
+                    placeholder="Enter total payable"
+                    value={manualTotal}
+                    onChange={(e) => setManualTotal(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>EMI / Installment *</Label>
+                  <Input
+                    required
+                    type="number"
+                    placeholder="Enter installment amount"
+                    value={loan.installmentAmount}
+                    onChange={(e) => setL("installmentAmount", e.target.value)}
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <Label>EMI / Installment</Label>
+                <Input
+                  type="number"
+                  placeholder={calc ? String(calc.installmentAmount) : "Auto-calculated"}
+                  value={loan.installmentAmount}
+                  onChange={(e) => {
+                    setL("installmentAmount", e.target.value);
+                    setEmiManual(!!e.target.value);
+                  }}
+                />
+              </div>
+            )}
+
             <div className="space-y-2">
-              <Label>EMI / Installment</Label>
-              <Input
-                type="number"
-                placeholder={calc ? String(calc.installmentAmount) : "Auto-calculated"}
-                value={loan.installmentAmount}
-                onChange={(e) => {
-                  setL("installmentAmount", e.target.value);
-                  setEmiManual(!!e.target.value);
-                }}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Start Date *</Label>
+              <Label>Application Date *</Label>
               <Input required type="date" value={loan.startDate} onChange={(e) => setL("startDate", e.target.value)} />
             </div>
             <div className="space-y-2 md:col-span-2">
@@ -376,10 +505,10 @@ export function CustomerLoanIntake({
             <CardTitle>KYC Documents</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
-            <DocumentSlot label="Aadhaar (Front)" type="AADHAAR_FRONT" value={aadhaarFront} onChange={setAadhaarFront} />
-            <DocumentSlot label="Aadhaar (Back)" type="AADHAAR_BACK" value={aadhaarBack} onChange={setAadhaarBack} />
-            <DocumentSlot label="PAN Card" type="PAN" value={panDoc} onChange={setPanDoc} />
-            <DocumentSlot label="Signature" type="SIGNATURE" value={signatureDoc} onChange={setSignatureDoc} folder="signatures" />
+            <DocumentSlot label="Aadhaar (Front)" type="AADHAAR_FRONT" value={aadhaarFront} onChange={setAadhaarFront} allowCapture />
+            <DocumentSlot label="Aadhaar (Back)" type="AADHAAR_BACK" value={aadhaarBack} onChange={setAadhaarBack} allowCapture />
+            <DocumentSlot label="PAN Card" type="PAN" value={panDoc} onChange={setPanDoc} allowCapture />
+            <DocumentSlot label="Signature" type="SIGNATURE" value={signatureDoc} onChange={setSignatureDoc} folder="signatures" allowCapture />
           </CardContent>
         </Card>
 
@@ -410,7 +539,19 @@ export function CustomerLoanIntake({
             <CardTitle>Loan Preview</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {!calc ? (
+            {selfCalc ? (
+              loan.principal ? (
+                <>
+                  <Row label="Mode" value="Self Calculate" />
+                  <Row label="Principal" value={formatMoney(Number(loan.principal))} />
+                  <Row label="Interest" value={manualInterest ? formatMoney(Number(manualInterest)) : "—"} />
+                  <Row label="Total Payable" value={manualTotal ? formatMoney(Number(manualTotal)) : "—"} strong />
+                  <Row label="Installment" value={loan.installmentAmount ? formatMoney(Number(loan.installmentAmount)) : "—"} strong />
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">Enter loan details to preview…</p>
+              )
+            ) : !calc ? (
               <p className="text-sm text-muted-foreground">Enter principal and tenure to preview…</p>
             ) : (
               <>
@@ -428,8 +569,17 @@ export function CustomerLoanIntake({
         </Card>
 
         <div className="flex flex-col gap-2">
-          <Button type="submit" disabled={loading} className="w-full">
+          <Button type="submit" disabled={loading || savingDraft} className="w-full">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create & Submit for Review"}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full"
+            disabled={loading || savingDraft}
+            onClick={() => doSubmit(true)}
+          >
+            {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save as Draft"}
           </Button>
           <Button type="button" variant="outline" onClick={() => history.back()}>
             Cancel

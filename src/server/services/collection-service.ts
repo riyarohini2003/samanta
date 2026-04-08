@@ -138,7 +138,22 @@ export async function getDueSummary(params: {
     loanAccount: loanWhere,
   };
 
-  const [all, paid, partial, missed, pending] = await Promise.all([
+  // Build scope filter for payments (branch / employee restrictions)
+  const paymentScopeWhere: Prisma.PaymentWhereInput = {
+    isReversed: false,
+    ...(params.user.role === "EMPLOYEE"
+      ? { collectedById: params.user.id }
+      : params.employeeId
+      ? { collectedById: params.employeeId }
+      : {}),
+    ...(params.branchId
+      ? { loanAccount: { branchId: params.branchId } }
+      : params.user.role === "BRANCH_MANAGER" && params.user.branchId
+      ? { loanAccount: { branchId: params.user.branchId } }
+      : {}),
+  };
+
+  const [all, paid, partial, missed, pending, collectedOnDate] = await Promise.all([
     prisma.repaymentSchedule.aggregate({
       where,
       _sum: { dueAmount: true, paidAmount: true },
@@ -164,15 +179,28 @@ export async function getDueSummary(params: {
       _sum: { dueAmount: true, paidAmount: true },
       _count: true,
     }),
+    // Actual collections made on the selected date (by collectedAt, not dueDate)
+    prisma.payment.aggregate({
+      where: {
+        ...paymentScopeWhere,
+        collectedAt: {
+          gte: dayjs.utc(date).startOf("day").toDate(),
+          lt: dayjs.utc(date).add(1, "day").startOf("day").toDate(),
+        },
+      },
+      _sum: { amount: true },
+      _count: true,
+    }),
   ]);
 
   const totalDue = toNumber(all._sum.dueAmount);
-  const totalCollected = toNumber(all._sum.paidAmount);
+  const totalCollected = toNumber(collectedOnDate._sum.amount);
 
   return {
     totalCustomers: all._count,
     totalDue,
     totalCollected,
+    totalCollectedCount: collectedOnDate._count,
     pendingCollection: Math.max(totalDue - totalCollected, 0),
     counts: {
       pending: pending._count,

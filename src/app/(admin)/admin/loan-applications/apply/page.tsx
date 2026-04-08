@@ -1,9 +1,35 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
-import { Card, CardContent } from "@/components/ui/card";
-import { UserPlus, UserSearch, ArrowRight } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/badge";
+import { UserPlus, UserSearch, ArrowRight, FileEdit } from "lucide-react";
+import { prisma } from "@/server/db";
+import { requireUser } from "@/server/auth/session";
+import { scopeWhere } from "@/server/auth/guards";
+import { fmtDate } from "@/lib/dayjs";
+import { formatMoney } from "@/lib/formatters";
 
-export default function ApplyLoanPage() {
+export default async function ApplyLoanPage() {
+  let drafts: any[] = [];
+  try {
+    const me = await requireUser();
+    drafts = await prisma.loanApplication.findMany({
+      where: {
+        status: "DRAFT",
+        ...scopeWhere(me),
+        ...(me.role === "EMPLOYEE" ? { createdById: me.id } : {}),
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 10,
+      include: {
+        customer: { select: { customerCode: true, fullName: true } },
+        branch: { select: { code: true } },
+      },
+    });
+  } catch {
+    // Not authenticated or error — drafts stays empty
+  }
+
   return (
     <div>
       <PageHeader
@@ -50,6 +76,43 @@ export default function ApplyLoanPage() {
           </Card>
         </Link>
       </div>
+
+      {/* ─── Drafts Section ──────────────────────────────────────────── */}
+      {drafts.length > 0 && (
+        <Card className="mt-8 max-w-3xl">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <FileEdit className="h-5 w-5" />
+              Saved Drafts ({drafts.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="divide-y">
+              {drafts.map((d) => (
+                <Link
+                  key={d.id}
+                  href={`/admin/loan-applications/${d.id}/edit`}
+                  className="flex items-center justify-between gap-4 py-3 hover:bg-muted/50 -mx-2 px-2 rounded-md transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs">{d.applicationNo}</span>
+                      <StatusBadge status={d.status} />
+                      <span className="text-xs text-muted-foreground">{d.loanType}</span>
+                    </div>
+                    <p className="mt-0.5 text-sm text-muted-foreground truncate">
+                      {d.customer.customerCode} · {d.customer.fullName} · {formatMoney(d.principal)}
+                    </p>
+                  </div>
+                  <div className="text-xs text-muted-foreground shrink-0">
+                    {fmtDate(d.updatedAt)}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

@@ -21,9 +21,15 @@ export async function POST(req: NextRequest) {
     const body = loginSchema.parse(await req.json());
     const meta = getRequestMeta(req);
 
-    const user = await prisma.user.findUnique({
+    // Try exact match first, then with +91 prefix for bare phone numbers
+    let user = await prisma.user.findUnique({
       where: { loginId: body.loginId },
     });
+    if (!user && /^\d{10}$/.test(body.loginId)) {
+      user = await prisma.user.findUnique({
+        where: { loginId: `+91${body.loginId}` },
+      });
+    }
 
     if (!user || !user.isActive || user.deletedAt) {
       await writeAudit({

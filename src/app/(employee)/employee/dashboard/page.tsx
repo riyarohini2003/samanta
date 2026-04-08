@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Landmark, Wallet, CheckCircle, FileText } from "lucide-react";
 import { toDateOnly } from "@/lib/dayjs";
 import { formatMoney, toNumber } from "@/lib/formatters";
+import { getLoanStatusDistribution, getCollectionTrend } from "@/server/services/dashboard-service";
+import { LoanStatusPie, CollectionTrendArea } from "@/components/ui/dashboard-charts";
 
 export const dynamic = "force-dynamic";
 
@@ -42,15 +44,21 @@ export default async function EmployeeDashboard() {
     }),
   ]);
 
+  const loanScope = loanScopeWhere(me);
+  const [loanStatusData, collectionTrend] = await Promise.all([
+    getLoanStatusDistribution(loanScope),
+    getCollectionTrend(7, loanScope),
+  ]);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <PageHeader title={`Hello, ${me.name}`} description="Your overview for today" />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="My Customers" value={myCustomers} icon={<Users className="h-6 w-6" />} />
-        <StatCard label="My Loans" value={myLoans} icon={<Landmark className="h-6 w-6" />} />
-        <StatCard label="Pending Applications" value={myPending} tone="warning" icon={<FileText className="h-6 w-6" />} />
-        <StatCard label="Due Today" value={dueToday._count} hint={formatMoney(toNumber(dueToday._sum.dueAmount))} tone="info" icon={<Wallet className="h-6 w-6" />} />
+        <StatCard label="My Customers" value={myCustomers} icon={<Users className="h-6 w-6" />} href="/employee/customers" />
+        <StatCard label="My Loans" value={myLoans} icon={<Landmark className="h-6 w-6" />} href="/employee/loans" />
+        <StatCard label="Pending Applications" value={myPending} tone="warning" icon={<FileText className="h-6 w-6" />} href="/employee/loan-applications" />
+        <StatCard label="Due Today" value={dueToday._count} hint={formatMoney(toNumber(dueToday._sum.dueAmount))} tone="info" icon={<Wallet className="h-6 w-6" />} href="/employee/collections" />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -60,19 +68,32 @@ export default async function EmployeeDashboard() {
           hint={`${collectedToday._count} payments`}
           tone="success"
           icon={<CheckCircle className="h-6 w-6" />}
+          href="/employee/collections"
         />
+      </div>
+
+      {/* Charts */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle>My Loan Status</CardTitle></CardHeader>
+          <CardContent><LoanStatusPie data={loanStatusData} /></CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>Collection Trend (7 Days)</CardTitle></CardHeader>
+          <CardContent><CollectionTrendArea data={collectionTrend} /></CardContent>
+        </Card>
       </div>
 
       <Card>
         <CardHeader><CardTitle>Quick Actions</CardTitle></CardHeader>
         <CardContent className="flex flex-wrap gap-3">
-          <Link href="/employee/collections" className="rounded-md border bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+          <Link href="/employee/collections" className="inline-flex items-center rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md active:scale-[0.97]">
             Start Today&apos;s Collection
           </Link>
-          <Link href="/employee/customers/new" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent">
+          <Link href="/employee/customers/new" className="inline-flex items-center rounded-lg border border-input px-5 py-2.5 text-sm font-medium transition-all hover:bg-accent hover:border-accent active:scale-[0.97]">
             Add New Customer
           </Link>
-          <Link href="/employee/loan-applications/apply" className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent">
+          <Link href="/employee/loan-applications/apply" className="inline-flex items-center rounded-lg border border-input px-5 py-2.5 text-sm font-medium transition-all hover:bg-accent hover:border-accent active:scale-[0.97]">
             Apply Loan
           </Link>
         </CardContent>

@@ -41,7 +41,7 @@
     --radius: 0.65rem;
 
     /* Sidebar surface (slightly offset from background) */
-    --sidebar: 0 0% 100%;
+    --sidebar: 220 33% 98%;
     --sidebar-foreground: 222 47% 11%;
     --sidebar-border: 214 32% 91%;
     --sidebar-accent: 214 95% 93%;
@@ -52,9 +52,9 @@
     /* Surface + text — layered dark grays with a cool undertone */
     --background: 222 47% 5%;
     --foreground: 210 40% 98%;
-    --card: 222 40% 11%;
+    --card: 222 40% 8%;
     --card-foreground: 210 40% 98%;
-    --popover: 222 40% 11%;
+    --popover: 222 40% 8%;
     --popover-foreground: 210 40% 98%;
 
     /* Brand — brighter blue for dark to keep accessible contrast */
@@ -64,9 +64,9 @@
     /* Neutrals */
     --secondary: 217 33% 17%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 15%;
-    --muted-foreground: 215 20% 72%;
-    --accent: 217 33% 22%;
+    --muted: 217 33% 12%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 33% 18%;
     --accent-foreground: 210 40% 98%;
 
     /* Semantics */
@@ -80,15 +80,15 @@
     --info-foreground: 210 40% 98%;
 
     /* Lines + focus — brighter so cards separate clearly */
-    --border: 217 33% 24%;
-    --input: 217 33% 24%;
+    --border: 217 33% 18%;
+    --input: 217 33% 20%;
     --ring: 217 91% 62%;
 
     /* Sidebar — a touch darker than content for depth */
     --sidebar: 222 47% 4%;
     --sidebar-foreground: 210 40% 92%;
-    --sidebar-border: 217 33% 18%;
-    --sidebar-accent: 217 33% 20%;
+    --sidebar-border: 217 33% 14%;
+    --sidebar-accent: 217 33% 16%;
     --sidebar-accent-foreground: 210 40% 98%;
   }
 }
@@ -99,6 +99,7 @@
   }
   html {
     color-scheme: light;
+    scroll-behavior: smooth;
   }
   html.dark {
     color-scheme: dark;
@@ -122,24 +123,25 @@
 
   /* Custom scrollbar — subtle, theme-aware */
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--border));
+    background-color: hsl(var(--muted-foreground) / 0.2);
     border-radius: 9999px;
-    border: 2px solid hsl(var(--background));
+    border: 2px solid transparent;
+    background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background-color: hsl(var(--muted-foreground) / 0.5);
+    background-color: hsl(var(--muted-foreground) / 0.4);
   }
 
   /* Selection */
   ::selection {
-    background-color: hsl(var(--primary) / 0.25);
+    background-color: hsl(var(--primary) / 0.2);
     color: hsl(var(--foreground));
   }
 }
@@ -149,10 +151,10 @@
   .bg-grid {
     background-image: radial-gradient(
       circle at 1px 1px,
-      hsl(var(--muted-foreground) / 0.18) 1px,
+      hsl(var(--muted-foreground) / 0.15) 1px,
       transparent 0
     );
-    background-size: 24px 24px;
+    background-size: 28px 28px;
   }
   .bg-grid-fade {
     mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 40%, transparent 80%);
@@ -162,6 +164,26 @@
   /* Elevated card with a soft ring — works in both themes */
   .card-elevated {
     @apply border bg-card shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.04];
+  }
+
+  /* Glass morphism utility */
+  .glass {
+    @apply bg-white/60 backdrop-blur-xl border-white/20 dark:bg-white/[0.04] dark:border-white/[0.08];
+  }
+
+  /* Gradient text helper */
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary via-blue-500 to-sky-500 bg-clip-text text-transparent;
+  }
+
+  /* Animated gradient orb for backgrounds */
+  .orb {
+    @apply pointer-events-none absolute rounded-full blur-3xl;
+  }
+
+  /* Smooth page transition wrapper */
+  .page-enter {
+    @apply animate-fade-in;
   }
 }
 

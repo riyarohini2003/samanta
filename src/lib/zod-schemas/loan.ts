@@ -25,6 +25,7 @@ export const loanApplicationCreateSchema = z.object({
   interestMethod: z.enum(["SIMPLE", "COMPOUND"]).default("SIMPLE"),
   ratePeriod: z.enum(["WEEKLY", "MONTHLY", "ANNUAL"]).default("ANNUAL"),
   documents: z.array(uploadedDocSchema).optional(),
+  asDraft: z.boolean().optional(),
 });
 
 /** Combined intake: create a new customer AND their first loan application in one call. */
@@ -43,6 +44,11 @@ export const loanIntakeSchema = z.object({
     interestMethod: z.enum(["SIMPLE", "COMPOUND"]).default("SIMPLE"),
     ratePeriod: z.enum(["WEEKLY", "MONTHLY", "ANNUAL"]).default("ANNUAL"),
     documents: z.array(uploadedDocSchema).optional(),
+    asDraft: z.boolean().optional(),
+    /** Self-calculate mode: bypass server calculation, use provided values */
+    selfCalculate: z.boolean().optional(),
+    interestAmount: z.coerce.number().nonnegative().optional(),
+    totalPayable: z.coerce.number().nonnegative().optional(),
   }),
 });
 
@@ -71,6 +77,11 @@ export const loanDisburseSchema = z.object({
   disbursementMode: z.enum(["CASH", "BANK", "UPI", "CHEQUE"]),
   disbursedAt: z.string().optional(),
   assignedEmployeeId: z.string().min(1),
+});
+
+export const loanCloseSchema = z.object({
+  type: z.enum(["close", "preclose"]).default("close"),
+  waiverAmount: z.coerce.number().nonnegative().optional(),
 });
 
 export type LoanCalcInput = z.infer<typeof loanCalcSchema>;

@@ -1,8 +1,10 @@
 import { prisma } from "@/server/db";
 import type { DisbursementMode } from "@prisma/client";
 import { buildScheduleRows } from "./schedule-generator";
+import { addUnits } from "./loan-calculator";
 import { nextLoanAccountNo } from "@/server/counters";
 import { toNumber } from "@/lib/formatters";
+import dayjs from "@/lib/dayjs";
 
 export async function disburseApplication(params: {
   applicationId: string;
@@ -29,6 +31,14 @@ export async function disburseApplication(params: {
     const accountNo = await nextLoanAccountNo(tx);
     const disbursedAt = params.disbursedAt ?? new Date();
 
+    // Use disbursement date as the loan start date and recalculate maturity
+    const startDate = dayjs.utc(disbursedAt).startOf("day").toDate();
+    const maturityDate = addUnits(
+      dayjs.utc(startDate),
+      app.loanType,
+      app.tenureCount - 1,
+    ).toDate();
+
     const account = await tx.loanAccount.create({
       data: {
         accountNo,
@@ -44,25 +54,30 @@ export async function disburseApplication(params: {
         pendingAmount: app.totalPayable,
         disbursedAt,
         disbursementMode: params.disbursementMode,
-        startDate: app.startDate,
-        maturityDate: app.maturityDate,
-        nextDueDate: app.startDate,
+        startDate,
+        maturityDate,
+        nextDueDate: startDate,
       },
     });
 
     const rows = buildScheduleRows({
       loanAccountId: account.id,
       loanType: app.loanType,
-      startDate: app.startDate,
+      startDate,
       tenureCount: app.tenureCount,
       installmentAmount: toNumber(app.installmentAmount),
       totalPayable: toNumber(app.totalPayable),
     });
     await tx.repaymentSchedule.createMany({ data: rows });
 
+    // Update application with actual start/maturity dates and mark as disbursed
     await tx.loanApplication.update({
       where: { id: app.id },
-      data: { status: "DISBURSED" },
+      data: {
+        status: "DISBURSED",
+        startDate,
+        maturityDate,
+      },
     });
 
     await tx.auditLog.create({

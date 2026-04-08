@@ -6,10 +6,10 @@ import { loanScopeWhere } from "@/server/auth/guards";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fmtDate } from "@/lib/dayjs";
 import { formatMoney } from "@/lib/formatters";
+import RepaymentSchedule from "@/app/(admin)/admin/loans/[id]/repayment-schedule";
+import { LoanCloseButton } from "@/components/ui/loan-close-dialog";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +31,12 @@ export default async function EmployeeLoanDetail({ params }: { params: { id: str
       <PageHeader
         title={loan.accountNo}
         description={`${loan.customer.fullName} · ${loan.loanType}`}
-        actions={<Button asChild variant="outline"><Link href="/employee/loans">Back</Link></Button>}
+        actions={
+          <div className="flex gap-2">
+            <LoanCloseButton loanId={loan.id} pendingAmount={Number(loan.pendingAmount)} loanStatus={loan.status} />
+            <Button asChild variant="outline"><Link href="/employee/loans">Back</Link></Button>
+          </div>
+        }
       />
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -44,28 +49,19 @@ export default async function EmployeeLoanDetail({ params }: { params: { id: str
       <Card>
         <CardHeader><CardTitle>Schedule</CardTitle></CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>#</TableHead>
-                <TableHead>Due Date</TableHead>
-                <TableHead>Due</TableHead>
-                <TableHead>Paid</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loan.schedule.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell>{s.installmentNo}</TableCell>
-                  <TableCell>{fmtDate(s.dueDate)}</TableCell>
-                  <TableCell>{formatMoney(s.dueAmount)}</TableCell>
-                  <TableCell>{formatMoney(s.paidAmount)}</TableCell>
-                  <TableCell><StatusBadge status={s.status} /></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <RepaymentSchedule
+            loanAccountId={loan.id}
+            loanStatus={loan.status}
+            schedule={loan.schedule.map((s) => ({
+              id: s.id,
+              installmentNo: s.installmentNo,
+              dueDate: s.dueDate.toISOString(),
+              dueAmount: Number(s.dueAmount),
+              paidAmount: Number(s.paidAmount),
+              status: s.status,
+              paidAt: s.paidAt ? s.paidAt.toISOString() : null,
+            }))}
+          />
         </CardContent>
       </Card>
     </div>

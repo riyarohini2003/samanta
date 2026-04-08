@@ -396,6 +396,20 @@ model Investment {
   @@index([maturityDate])
 }
 
+// ─── Automatic Backup Snapshots ─────────────────────────────────────
+model BackupSnapshot {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  filename     String
+  url          String   // Cloudinary secure_url
+  publicId     String   // Cloudinary public_id (for deletion)
+  sizeBytes    Int
+  stats        Json     // { users: N, branches: N, ... }
+  trigger      String   @default("cron") // "cron" | "manual"
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 // Generic key/value store for app-wide settings (organization profile, loan policy defaults,
 // security policy, integration credentials, audit policy, etc.). Each section is stored under
 // a well-known key with a JSON blob, so adding new settings never requires a schema change.

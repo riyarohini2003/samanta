@@ -7,7 +7,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, FileDown, Printer, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { fmtDate } from "@/lib/dayjs";
 import { formatMoney } from "@/lib/formatters";
 import { useRowSelection } from "@/lib/use-row-selection";
@@ -39,6 +40,19 @@ export default function ApplicationsTable({ apps }: { apps: ApplicationRow[] }) 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingIds, setPendingIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState<string | null>(null);
+
+  async function handlePdf(id: string, mode: "download" | "print") {
+    setPdfLoading(id);
+    try {
+      const res = await fetch(`/api/v1/loan-applications/${id}`);
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error || "Failed to load"); return; }
+      const { generateApplicationPdf } = await import("@/lib/application-pdf");
+      generateApplicationPdf(json.data, mode);
+    } catch { toast.error("Failed to generate PDF"); }
+    finally { setPdfLoading(null); }
+  }
 
   function askDelete(targetIds: string[]) {
     if (targetIds.length === 0) return;
@@ -133,6 +147,26 @@ export default function ApplicationsTable({ apps }: { apps: ApplicationRow[] }) 
                 <TableCell><StatusBadge status={a.status} /></TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Print"
+                      disabled={pdfLoading === a.id}
+                      onClick={() => handlePdf(a.id, "print")}
+                    >
+                      {pdfLoading === a.id
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Printer className="h-4 w-4" />}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Download PDF"
+                      disabled={pdfLoading === a.id}
+                      onClick={() => handlePdf(a.id, "download")}
+                    >
+                      <FileDown className="h-4 w-4" />
+                    </Button>
                     {canEdit && (
                       <Button asChild variant="ghost" size="icon" title="Edit">
                         <Link href={`/admin/loan-applications/${a.id}/edit`}>

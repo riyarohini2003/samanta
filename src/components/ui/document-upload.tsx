@@ -1,8 +1,8 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Upload, X, FileText, Loader2 } from "lucide-react";
+import { Upload, X, FileText, Loader2, Camera } from "lucide-react";
 
 export type UploadedDoc = {
   type: string;
@@ -10,7 +10,7 @@ export type UploadedDoc = {
   name?: string;
 };
 
-/** Single fixed-slot document uploader (e.g. "Aadhaar Front"). */
+/** Single fixed-slot document uploader (e.g. "Aadhaar Front") with optional live capture. */
 export function DocumentSlot({
   label,
   type,
@@ -18,6 +18,7 @@ export function DocumentSlot({
   onChange,
   folder = "customer-docs",
   accept = "image/*,application/pdf",
+  allowCapture = false,
 }: {
   label: string;
   type: string;
@@ -25,9 +26,95 @@ export function DocumentSlot({
   onChange: (doc: UploadedDoc | undefined) => void;
   folder?: string;
   accept?: string;
+  /** Show a "Live Capture" button to take a photo with the camera */
+  allowCapture?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+
+  useEffect(() => {
+    return () => stopStream();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function stopStream() {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+  }
+
+  async function startCamera() {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        toast.error("Camera not supported in this browser");
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setCameraOpen(true);
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      }, 50);
+    } catch (err: any) {
+      toast.error(err?.message || "Cannot access camera");
+    }
+  }
+
+  function closeCamera() {
+    stopStream();
+    setCameraOpen(false);
+  }
+
+  async function captureFrame() {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    const w = video.videoWidth || 1280;
+    const h = video.videoHeight || 720;
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, w, h);
+    canvas.toBlob(
+      async (blob) => {
+        if (!blob) return;
+        await uploadBlob(blob, `${type.toLowerCase()}_capture.jpg`);
+        closeCamera();
+      },
+      "image/jpeg",
+      0.9
+    );
+  }
+
+  async function uploadBlob(blob: Blob, filename: string) {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", blob, filename);
+      fd.append("folder", folder);
+      const res = await fetch("/api/v1/uploads", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error || "Upload failed");
+        return;
+      }
+      onChange({ type, url: json.data.url, name: filename });
+      toast.success(`${label} captured`);
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -90,8 +177,31 @@ export function DocumentSlot({
             <X className="h-4 w-4" />
           </Button>
         </div>
+      ) : cameraOpen ? (
+        <div className="space-y-2">
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            className="aspect-video w-full rounded-md border bg-black"
+          />
+          <div className="flex gap-2">
+            <Button type="button" size="sm" onClick={captureFrame} disabled={uploading}>
+              {uploading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Camera className="h-4 w-4" />
+              )}
+              Capture
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={closeCamera}>
+              Cancel
+            </Button>
+          </div>
+          <canvas ref={canvasRef} className="hidden" />
+        </div>
       ) : (
-        <>
+        <div className="flex flex-wrap gap-2">
           <Button
             type="button"
             variant="outline"
@@ -106,6 +216,18 @@ export function DocumentSlot({
             )}
             Upload
           </Button>
+          {allowCapture && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={startCamera}
+              disabled={uploading}
+            >
+              <Camera className="h-4 w-4" />
+              Live Capture
+            </Button>
+          )}
           <input
             ref={inputRef}
             type="file"
@@ -113,7 +235,7 @@ export function DocumentSlot({
             className="hidden"
             onChange={onFile}
           />
-        </>
+        </div>
       )}
     </div>
   );

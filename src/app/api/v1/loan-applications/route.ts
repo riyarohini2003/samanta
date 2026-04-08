@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
 
     const calc = calculateLoan({ ...body, startDate: body.startDate });
     const applicationNo = await nextApplicationNo();
+    const isDraft = body.asDraft === true;
 
     const app = await prisma.loanApplication.create({
       data: {
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
         maturityDate: calc.maturityDate,
         purpose: body.purpose,
         notes: body.notes,
-        status: "SUBMITTED",
+        status: isDraft ? "DRAFT" : "SUBMITTED",
         createdById: me.id,
         documents: body.documents && body.documents.length
           ? { create: body.documents.map((d) => ({ type: d.type, url: d.url })) }
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest) {
 
     await writeAudit({
       userId: me.id,
-      action: "APPLICATION_SUBMITTED",
+      action: isDraft ? "APPLICATION_DRAFTED" : "APPLICATION_SUBMITTED",
       entityType: "LoanApplication",
       entityId: app.id,
       after: app,

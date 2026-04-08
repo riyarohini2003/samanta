@@ -157,13 +157,15 @@ export function LoanApplicationForm({
       .catch(() => {});
   }, [debounced]);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const [savingDraft, setSavingDraft] = useState(false);
+
+  async function doSubmit(asDraft: boolean) {
     if (!form.customerId) {
       toast.error("Please select a customer");
       return;
     }
-    setLoading(true);
+    if (asDraft) setSavingDraft(true);
+    else setLoading(true);
     try {
       const url = isEdit ? `/api/v1/loan-applications/${initial!.id}` : "/api/v1/loan-applications";
       const method = isEdit ? "PATCH" : "POST";
@@ -181,7 +183,7 @@ export function LoanApplicationForm({
             interestMethod: form.interestMethod,
             ratePeriod: form.ratePeriod,
           }
-        : form;
+        : { ...form, asDraft };
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -193,7 +195,9 @@ export function LoanApplicationForm({
         return;
       }
       toast.success(
-        isEdit
+        asDraft
+          ? `Draft ${json.data.applicationNo} saved`
+          : isEdit
           ? `Application ${initial!.applicationNo} updated`
           : `Application ${json.data.applicationNo} submitted for review`
       );
@@ -201,7 +205,13 @@ export function LoanApplicationForm({
       router.refresh();
     } finally {
       setLoading(false);
+      setSavingDraft(false);
     }
+  }
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await doSubmit(false);
   }
 
   const tenureUnitLabel =
@@ -383,7 +393,7 @@ export function LoanApplicationForm({
               />
             </div>
             <div className="space-y-2">
-              <Label>Start Date *</Label>
+              <Label>Application Date *</Label>
               <Input
                 required
                 type="date"
@@ -408,7 +418,17 @@ export function LoanApplicationForm({
               <Button type="button" variant="outline" onClick={() => history.back()}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={loading || !form.customerId}>
+              {!isEdit && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={loading || savingDraft || !form.customerId}
+                  onClick={() => doSubmit(true)}
+                >
+                  {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save as Draft"}
+                </Button>
+              )}
+              <Button type="submit" disabled={loading || savingDraft || !form.customerId}>
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : isEdit ? (

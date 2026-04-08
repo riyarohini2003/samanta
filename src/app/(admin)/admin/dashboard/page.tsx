@@ -12,6 +12,13 @@ import {
 import { toDateOnly } from "@/lib/dayjs";
 import { formatMoney } from "@/lib/formatters";
 import { toNumber } from "@/lib/formatters";
+import {
+  getLoanStatusDistribution,
+  getPortfolioAging,
+  getCollectionTrend,
+  getBranchPerformance,
+} from "@/server/services/dashboard-service";
+import { LoanStatusPie, PortfolioAgingBar, CollectionTrendArea, BranchPerformanceBar } from "@/components/ui/dashboard-charts";
 
 export const dynamic = "force-dynamic";
 
@@ -80,8 +87,16 @@ export default async function AdminDashboard() {
   const totalCapital = toNumber(totalCapitalAgg._sum.principal);
   const ourFund = totalCollection - totalCapital;
 
+  // Chart data — fetched in parallel
+  const [loanStatusData, agingData, collectionTrend, branchPerformance] = await Promise.all([
+    getLoanStatusDistribution(),
+    getPortfolioAging(),
+    getCollectionTrend(7),
+    getBranchPerformance(),
+  ]);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <PageHeader title="Admin Dashboard" description="Overview of all branches, loans, and collections" />
 
       {/* Financial Overview */}
@@ -139,18 +154,46 @@ export default async function AdminDashboard() {
         <StatCard label="Collected Today" value={formatMoney(toNumber(collectedTodayAgg._sum.amount))} hint={`${collectedTodayAgg._count} payments`} tone="success" icon={<TrendingUp className="h-6 w-6" />} href="/admin/collections" />
       </div>
 
+      {/* Charts */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle>Loan Status Distribution</CardTitle></CardHeader>
+          <CardContent><LoanStatusPie data={loanStatusData} /></CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>Collection Trend (7 Days)</CardTitle></CardHeader>
+          <CardContent><CollectionTrendArea data={collectionTrend} /></CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle>Portfolio Aging</CardTitle></CardHeader>
+          <CardContent><PortfolioAgingBar data={agingData} /></CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>Branch Performance</CardTitle></CardHeader>
+          <CardContent><BranchPerformanceBar data={branchPerformance} /></CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader><CardTitle>Pending Applications</CardTitle></CardHeader>
         <CardContent>
           {recentApps.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No pending applications right now.</p>
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted/50 text-muted-foreground/50 mb-3">
+                <FileCheck className="h-6 w-6" />
+              </div>
+              <p className="text-sm text-muted-foreground">No pending applications right now.</p>
+            </div>
           ) : (
-            <ul className="divide-y">
+            <ul className="divide-y divide-border/50">
               {recentApps.map((a) => (
-                <li key={a.id} className="flex items-center justify-between py-3">
-                  <div>
-                    <Link href={`/admin/loan-applications/${a.id}`} className="font-mono text-sm font-medium hover:underline">{a.applicationNo}</Link>
-                    <div className="text-xs text-muted-foreground">{a.customer.fullName} · {a.branch.name} · {formatMoney(a.principal)}</div>
+                <li key={a.id} className="flex items-center justify-between py-3.5 transition-colors hover:bg-muted/30 -mx-6 px-6 first:-mt-1">
+                  <div className="min-w-0">
+                    <Link href={`/admin/loan-applications/${a.id}`} className="font-mono text-sm font-semibold text-foreground hover:text-primary transition-colors">{a.applicationNo}</Link>
+                    <div className="mt-0.5 text-xs text-muted-foreground">{a.customer.fullName} · {a.branch.name} · {formatMoney(a.principal)}</div>
                   </div>
                   <StatusBadge status={a.status} />
                 </li>
