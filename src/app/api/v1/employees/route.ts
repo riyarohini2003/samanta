@@ -61,16 +61,21 @@ export async function POST(req: NextRequest) {
     const me = await requireRole("SUPER_ADMIN", "ADMIN");
     const body = employeeCreateSchema.parse(await req.json());
 
-    // Check active (non-deleted) duplicates
+    // Check active (non-deleted) duplicates (case-insensitive)
     const existing = await prisma.user.findFirst({
-      where: { loginId: body.loginId, deletedAt: { isSet: false } },
+      where: {
+        loginId: { equals: body.loginId, mode: "insensitive" },
+        deletedAt: { isSet: false },
+      },
     });
     if (existing) return conflict("Login ID already taken");
 
     // Free up unique fields held by soft-deleted records so the DB constraint doesn't block us
-    const suffix = `_deleted_${Date.now()}`;
     await prisma.user.updateMany({
-      where: { loginId: body.loginId, deletedAt: { isSet: true } },
+      where: {
+        loginId: { equals: body.loginId, mode: "insensitive" },
+        deletedAt: { isSet: true },
+      },
       data: { loginId: `${body.loginId}${suffix}` },
     });
     if (body.email) {

@@ -21,13 +21,13 @@ export async function POST(req: NextRequest) {
     const body = loginSchema.parse(await req.json());
     const meta = getRequestMeta(req);
 
-    // Try exact match first, then with +91 prefix for bare phone numbers
-    let user = await prisma.user.findUnique({
-      where: { loginId: body.loginId },
+    // Try exact or case-insensitive match first, then with +91 prefix for bare phone numbers
+    let user = await prisma.user.findFirst({
+      where: { loginId: { equals: body.loginId, mode: "insensitive" } },
     });
     if (!user && /^\d{10}$/.test(body.loginId)) {
-      user = await prisma.user.findUnique({
-        where: { loginId: `+91${body.loginId}` },
+      user = await prisma.user.findFirst({
+        where: { loginId: { equals: `+91${body.loginId}`, mode: "insensitive" } },
       });
     }
 
