@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
     if (existing) return conflict("Login ID already taken");
 
     // Free up unique fields held by soft-deleted records so the DB constraint doesn't block us
+    const suffix = `__deleted_${Date.now()}`;
     await prisma.user.updateMany({
       where: {
         loginId: { equals: body.loginId, mode: "insensitive" },
