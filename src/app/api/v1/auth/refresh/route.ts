@@ -3,6 +3,7 @@ import { COOKIE_NAMES } from "@/lib/constants";
 import { verifyRefreshToken, signAccessToken, TOKEN_TTL } from "@/server/auth/jwt";
 import { prisma } from "@/server/db";
 import { ok, unauthorized, handleError } from "@/lib/api";
+import { setAuthCookies } from "@/server/auth/session";
 
 export async function POST() {
   try {
@@ -38,19 +39,16 @@ export async function POST() {
       name: user.name,
     });
 
-    const secure = process.env.NODE_ENV === "production";
-    const domain = process.env.COOKIE_DOMAIN || undefined;
-
-    cookieStore.set(COOKIE_NAMES.access, accessToken, {
+    const res = ok({ success: true });
+    res.cookies.set(COOKIE_NAMES.access, accessToken, {
       httpOnly: true,
-      secure,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
       maxAge: TOKEN_TTL.access,
-      domain,
+      domain: process.env.COOKIE_DOMAIN || undefined,
     });
-
-    return ok({ success: true });
+    return res;
   } catch (e) {
     return handleError(e);
   }

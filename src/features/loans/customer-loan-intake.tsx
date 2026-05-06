@@ -25,73 +25,125 @@ type CalcResult = {
   effectiveAnnualRate?: number;
 } | null;
 
+export interface IntakeInitial {
+  applicationId: string;
+  applicationNo: string;
+  customer: {
+    fullName: string;
+    fatherOrHusband?: string | null;
+    mobile: string;
+    altMobile?: string | null;
+    aadhaar?: string | null;
+    panOrTaxId?: string | null;
+    dob?: string | null;
+    gender?: string | null;
+    maritalStatus?: string | null;
+    occupation?: string | null;
+    monthlyIncome?: number | null;
+    currentAddress: string;
+    permanentAddress?: string | null;
+    guarantorName?: string | null;
+    guarantorMobile?: string | null;
+    guarantorRelation?: string | null;
+    referenceName?: string | null;
+    referenceMobile?: string | null;
+    bankName?: string | null;
+    bankAccount?: string | null;
+    ifsc?: string | null;
+    nomineeName?: string | null;
+    nomineeRelation?: string | null;
+    branchId: string;
+    photoUrl?: string | null;
+    documents?: { type: string; url: string }[];
+  };
+  loan: {
+    loanType: "DAILY" | "WEEKLY" | "MONTHLY";
+    principal: number;
+    interestRate: number;
+    processingFee: number;
+    tenureCount: number;
+    installmentAmount: number;
+    startDate: string;
+    purpose?: string | null;
+    notes?: string | null;
+    documents?: { type: string; url: string }[];
+  };
+}
+
 export function CustomerLoanIntake({
   branches,
   defaultBranchId,
   successRedirect,
+  initial,
 }: {
   branches: Branch[];
   defaultBranchId?: string;
   /** Where to navigate after successful submit, e.g. "/admin/dashboard" */
   successRedirect: string;
+  initial?: IntakeInitial;
 }) {
   const router = useRouter();
+  const isEdit = Boolean(initial?.applicationId);
   const [loading, setLoading] = useState(false);
   const [calc, setCalc] = useState<CalcResult>(null);
 
+  const ic = initial?.customer;
   const [customer, setCustomer] = useState({
-    fullName: "",
-    fatherOrHusband: "",
-    mobile: "",
-    altMobile: "",
-    aadhaar: "",
-    panOrTaxId: "",
-    dob: "",
-    gender: "",
-    maritalStatus: "",
-    occupation: "",
-    monthlyIncome: "",
-    currentAddress: "",
-    permanentAddress: "",
-    guarantorName: "",
-    guarantorMobile: "",
-    guarantorRelation: "",
-    referenceName: "",
-    referenceMobile: "",
-    bankName: "",
-    bankAccount: "",
-    ifsc: "",
-    nomineeName: "",
-    nomineeRelation: "",
-    branchId: defaultBranchId ?? branches[0]?.id ?? "",
+    fullName: ic?.fullName ?? "",
+    fatherOrHusband: ic?.fatherOrHusband ?? "",
+    mobile: ic?.mobile ?? "",
+    altMobile: ic?.altMobile ?? "",
+    aadhaar: ic?.aadhaar ?? "",
+    panOrTaxId: ic?.panOrTaxId ?? "",
+    dob: ic?.dob ?? "",
+    gender: ic?.gender ?? "",
+    maritalStatus: ic?.maritalStatus ?? "",
+    occupation: ic?.occupation ?? "",
+    monthlyIncome: ic?.monthlyIncome != null ? String(ic.monthlyIncome) : "",
+    currentAddress: ic?.currentAddress ?? "",
+    permanentAddress: ic?.permanentAddress ?? "",
+    guarantorName: ic?.guarantorName ?? "",
+    guarantorMobile: ic?.guarantorMobile ?? "",
+    guarantorRelation: ic?.guarantorRelation ?? "",
+    referenceName: ic?.referenceName ?? "",
+    referenceMobile: ic?.referenceMobile ?? "",
+    bankName: ic?.bankName ?? "",
+    bankAccount: ic?.bankAccount ?? "",
+    ifsc: ic?.ifsc ?? "",
+    nomineeName: ic?.nomineeName ?? "",
+    nomineeRelation: ic?.nomineeRelation ?? "",
+    branchId: ic?.branchId ?? defaultBranchId ?? branches[0]?.id ?? "",
   });
 
-  const [photoUrl, setPhotoUrl] = useState<string | undefined>(undefined);
+  const [photoUrl, setPhotoUrl] = useState<string | undefined>(ic?.photoUrl ?? undefined);
   const [sameAddress, setSameAddress] = useState(false);
 
-  // Customer KYC doc slots
-  const [aadhaarFront, setAadhaarFront] = useState<UploadedDoc | undefined>();
-  const [aadhaarBack, setAadhaarBack] = useState<UploadedDoc | undefined>();
-  const [panDoc, setPanDoc] = useState<UploadedDoc | undefined>();
-  const [signatureDoc, setSignatureDoc] = useState<UploadedDoc | undefined>();
+  // Customer KYC doc slots – restore from initial if editing
+  const findDoc = (docs: { type: string; url: string }[] | undefined, type: string) =>
+    docs?.find((d) => d.type === type) as UploadedDoc | undefined;
+  const [aadhaarFront, setAadhaarFront] = useState<UploadedDoc | undefined>(findDoc(ic?.documents, "AADHAAR_FRONT"));
+  const [aadhaarBack, setAadhaarBack] = useState<UploadedDoc | undefined>(findDoc(ic?.documents, "AADHAAR_BACK"));
+  const [panDoc, setPanDoc] = useState<UploadedDoc | undefined>(findDoc(ic?.documents, "PAN"));
+  const [signatureDoc, setSignatureDoc] = useState<UploadedDoc | undefined>(findDoc(ic?.documents, "SIGNATURE"));
 
   // Loan supporting docs
-  const [incomeProof, setIncomeProof] = useState<UploadedDoc | undefined>();
-  const [bankStatement, setBankStatement] = useState<UploadedDoc | undefined>();
-  const [otherLoanDoc, setOtherLoanDoc] = useState<UploadedDoc | undefined>();
+  const il = initial?.loan;
+  const [incomeProof, setIncomeProof] = useState<UploadedDoc | undefined>(findDoc(il?.documents, "INCOME_PROOF"));
+  const [bankStatement, setBankStatement] = useState<UploadedDoc | undefined>(findDoc(il?.documents, "BANK_STATEMENT"));
+  const [otherLoanDoc, setOtherLoanDoc] = useState<UploadedDoc | undefined>(findDoc(il?.documents, "OTHER"));
 
   const [loan, setLoan] = useState({
-    loanType: "DAILY" as "DAILY" | "WEEKLY" | "MONTHLY",
-    principal: "",
-    interestRate: "24",
+    loanType: (il?.loanType ?? "DAILY") as "DAILY" | "WEEKLY" | "MONTHLY",
+    principal: il ? String(il.principal) : "",
+    interestRate: il ? String(il.interestRate) : "24",
     interestMethod: "SIMPLE" as "SIMPLE" | "COMPOUND",
     ratePeriod: "ANNUAL" as "WEEKLY" | "MONTHLY" | "ANNUAL",
-    processingFee: "0",
-    tenureCount: "100",
-    installmentAmount: "",
-    startDate: new Date().toISOString().slice(0, 10),
-    purpose: "",
-    notes: "",
+    processingFee: il ? String(il.processingFee) : "0",
+    tenureCount: il ? String(il.tenureCount) : "100",
+    installmentAmount: il ? String(il.installmentAmount) : "",
+    startDate: il?.startDate ?? new Date().toISOString().slice(0, 10),
+    purpose: il?.purpose ?? "",
+    notes: il?.notes ?? "",
   });
   const [emiManual, setEmiManual] = useState(false);
   const [selfCalc, setSelfCalc] = useState(false);
@@ -167,8 +219,10 @@ export function CustomerLoanIntake({
     if (asDraft) setSavingDraft(true);
     else setLoading(true);
     try {
-      const res = await fetch("/api/v1/intake", {
-        method: "POST",
+      const url = isEdit ? `/api/v1/intake/${initial!.applicationId}` : "/api/v1/intake";
+      const method = isEdit ? "PATCH" : "POST";
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customer: {
@@ -199,6 +253,8 @@ export function CustomerLoanIntake({
       toast.success(
         asDraft
           ? `Draft ${json.data.applicationNo} saved`
+          : isEdit
+          ? `Application ${json.data.applicationNo} updated & submitted`
           : `Application ${json.data.applicationNo} submitted for review`
       );
       router.push(successRedirect);
@@ -570,7 +626,13 @@ export function CustomerLoanIntake({
 
         <div className="flex flex-col gap-2">
           <Button type="submit" disabled={loading || savingDraft} className="w-full">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create & Submit for Review"}
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : isEdit ? (
+              "Update & Submit for Review"
+            ) : (
+              "Create & Submit for Review"
+            )}
           </Button>
           <Button
             type="button"
@@ -579,7 +641,13 @@ export function CustomerLoanIntake({
             disabled={loading || savingDraft}
             onClick={() => doSubmit(true)}
           >
-            {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save as Draft"}
+            {savingDraft ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : isEdit ? (
+              "Update Draft"
+            ) : (
+              "Save as Draft"
+            )}
           </Button>
           <Button type="button" variant="outline" onClick={() => history.back()}>
             Cancel

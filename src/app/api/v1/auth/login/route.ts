@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/server/db";
 import { loginSchema } from "@/lib/zod-schemas/auth";
 import { verifyPassword } from "@/server/auth/password";
-import { createSession } from "@/server/auth/session";
+import { createSession, setAuthCookies } from "@/server/auth/session";
 import { ok, handleError, unauthorized } from "@/lib/api";
 import { writeAudit, getRequestMeta } from "@/server/audit";
 import { loginLimiter, getClientIp } from "@/server/rate-limit";
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       return unauthorized("Invalid credentials");
     }
 
-    await createSession(user, {
+    const tokens = await createSession(user, {
       ip: meta.ip ?? undefined,
       userAgent: meta.userAgent ?? undefined,
     });
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
       ...meta,
     });
 
-    return ok({
+    const res = ok({
       user: {
         id: user.id,
         name: user.name,
@@ -83,6 +83,8 @@ export async function POST(req: NextRequest) {
       },
       redirect: user.role === "EMPLOYEE" ? "/employee/dashboard" : "/admin/dashboard",
     });
+    setAuthCookies(res, tokens);
+    return res;
   } catch (e) {
     return handleError(e);
   }

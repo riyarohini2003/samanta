@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
           maturityDate: calc.maturityDate,
           purpose: l.purpose,
           notes: l.notes,
+          source: "INTAKE",
           status: isDraft ? "DRAFT" : "SUBMITTED",
           createdById: me.id,
           documents: l.documents && l.documents.length

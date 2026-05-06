@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { COOKIE_NAMES } from "@/lib/constants";
 import { signAccessToken, signRefreshToken, TOKEN_TTL, verifyAccessToken } from "./jwt";
 import { prisma } from "@/server/db";
@@ -15,6 +16,33 @@ export type CurrentUser = {
   mobile: string;
   photoUrl: string | null;
 };
+
+/** Cookie options shared by login / refresh */
+function cookieOpts(maxAge: number) {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge,
+    domain: process.env.COOKIE_DOMAIN || undefined,
+  };
+}
+
+/** Set auth cookies directly on a NextResponse (works reliably in Route Handlers). */
+export function setAuthCookies(
+  res: NextResponse,
+  tokens: { access: string; refresh: string },
+) {
+  res.cookies.set(COOKIE_NAMES.access, tokens.access, cookieOpts(TOKEN_TTL.access));
+  res.cookies.set(COOKIE_NAMES.refresh, tokens.refresh, cookieOpts(TOKEN_TTL.refresh));
+}
+
+/** Clear auth cookies on a NextResponse. */
+export function clearAuthCookies(res: NextResponse) {
+  res.cookies.delete(COOKIE_NAMES.access);
+  res.cookies.delete(COOKIE_NAMES.refresh);
+}
 
 export async function createSession(user: User, meta: { ip?: string; userAgent?: string }) {
   const access = await signAccessToken({
@@ -35,27 +63,6 @@ export async function createSession(user: User, meta: { ip?: string; userAgent?:
     },
   });
 
-  const cookieStore = cookies();
-  const secure = process.env.NODE_ENV === "production";
-  const domain = process.env.COOKIE_DOMAIN || undefined;
-
-  cookieStore.set(COOKIE_NAMES.access, access, {
-    httpOnly: true,
-    secure,
-    sameSite: "lax",
-    path: "/",
-    maxAge: TOKEN_TTL.access,
-    domain,
-  });
-  cookieStore.set(COOKIE_NAMES.refresh, refresh, {
-    httpOnly: true,
-    secure,
-    sameSite: "lax",
-    path: "/",
-    maxAge: TOKEN_TTL.refresh,
-    domain,
-  });
-
   return { access, refresh };
 }
 
@@ -67,8 +74,6 @@ export async function destroySession() {
       .deleteMany({ where: { refreshToken: refresh } })
       .catch(() => null);
   }
-  cookieStore.delete(COOKIE_NAMES.access);
-  cookieStore.delete(COOKIE_NAMES.refresh);
 }
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {

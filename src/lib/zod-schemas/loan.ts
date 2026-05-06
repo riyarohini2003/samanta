@@ -52,6 +52,29 @@ export const loanIntakeSchema = z.object({
   }),
 });
 
+/** Update an intake draft: customer fields + loan fields together. */
+export const loanIntakeUpdateSchema = z.object({
+  customer: customerCreateSchema.partial(),
+  loan: z.object({
+    loanType: z.enum(["DAILY", "WEEKLY", "MONTHLY"]).optional(),
+    principal: z.coerce.number().positive().optional(),
+    interestRate: z.coerce.number().nonnegative().optional(),
+    processingFee: z.coerce.number().nonnegative().optional(),
+    tenureCount: z.coerce.number().int().positive().optional(),
+    installmentAmount: z.coerce.number().nonnegative().optional(),
+    startDate: z.string().optional(),
+    purpose: z.string().optional(),
+    notes: z.string().optional(),
+    interestMethod: z.enum(["SIMPLE", "COMPOUND"]).optional(),
+    ratePeriod: z.enum(["WEEKLY", "MONTHLY", "ANNUAL"]).optional(),
+    documents: z.array(uploadedDocSchema).optional(),
+    asDraft: z.boolean().optional(),
+    selfCalculate: z.boolean().optional(),
+    interestAmount: z.coerce.number().nonnegative().optional(),
+    totalPayable: z.coerce.number().nonnegative().optional(),
+  }),
+});
+
 export const loanApplicationUpdateSchema = z.object({
   loanType: z.enum(["DAILY", "WEEKLY", "MONTHLY"]).optional(),
   principal: z.coerce.number().positive().optional(),

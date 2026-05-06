@@ -209,6 +209,7 @@ model LoanApplication {
   maturityDate      DateTime
   purpose           String?
   notes             String?
+  source            String        @default("STANDARD") // "INTAKE" or "STANDARD"
   status            LoanAppStatus @default(DRAFT)
   createdById       String        @db.ObjectId
   createdBy         User          @relation("CreatedBy", fields: [createdById], references: [id])
