@@ -71,6 +71,19 @@ enum InvestmentStatus {
   WITHDRAWN
 }
 
+enum PayoutMode {
+  MONTHLY_INTEREST // simple monthly interest payout, principal at maturity
+  MONTHLY_EMI // amortized monthly EMI (principal + interest)
+  CUSTOM // schedule entered manually by admin
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+  PARTIAL
+  SKIPPED
+}
+
 // ─── Models ─────────────────────────────────────────────────────────────
 model User {
   id           String    @id @default(auto()) @map("_id") @db.ObjectId
@@ -200,7 +213,7 @@ model LoanApplication {
   loanType          LoanType
   principal         Float
   interestRate      Float
-  processingFee     Float       @default(0)
+  processingFee     Float         @default(0)
   tenureCount       Int
   installmentAmount Float
   totalPayable      Float
@@ -253,10 +266,10 @@ model LoanAccount {
   interestAmount     Float
   totalPayable       Float
   installmentAmount  Float
-  paidAmount         Float          @default(0)
+  paidAmount         Float            @default(0)
   pendingAmount      Float
-  overdueAmount      Float          @default(0)
-  penaltyAmount      Float          @default(0)
+  overdueAmount      Float            @default(0)
+  penaltyAmount      Float            @default(0)
   disbursedAt        DateTime
   disbursementMode   DisbursementMode
   startDate          DateTime
@@ -283,10 +296,10 @@ model RepaymentSchedule {
   installmentNo Int
   dueDate       DateTime
   dueAmount     Float
-  paidAmount    Float           @default(0)
+  paidAmount    Float             @default(0)
   status        InstallmentStatus @default(PENDING)
   paidAt        DateTime?
-  penaltyAmount Float           @default(0)
+  penaltyAmount Float             @default(0)
 
   @@unique([loanAccountId, installmentNo])
   @@index([dueDate, status])
@@ -300,7 +313,7 @@ model Payment {
   loanAccount    LoanAccount @relation(fields: [loanAccountId], references: [id])
   scheduleId     String?     @db.ObjectId
   amount         Float
-  penalty        Float     @default(0)
+  penalty        Float       @default(0)
   mode           PaymentMode
   collectedById  String      @db.ObjectId
   collectedBy    User        @relation(fields: [collectedById], references: [id])
@@ -381,32 +394,59 @@ model Investment {
   investorId      String           @db.ObjectId
   investor        Investor         @relation(fields: [investorId], references: [id])
   principalAmount Float
-  interestRate    Float            // Annual ROI %
+  interestRate    Float // Annual ROI %
   tenureMonths    Int
   investmentDate  DateTime
   maturityDate    DateTime
-  interestAmount  Float            // Calculated: P * R * T
-  totalReturn     Float            // principal + interest
+  interestAmount  Float // Calculated total interest payable
+  totalReturn     Float // principal + interest
   paidAmount      Float            @default(0)
   status          InvestmentStatus @default(ACTIVE)
+  payoutMode      PayoutMode       @default(MONTHLY_INTEREST)
+  agreementDate   DateTime? // when Letter of Agreement was signed
+  closedAt        DateTime? // when investment was matured/withdrawn
+  nocIssuedAt     DateTime? // when NOC was generated
   notes           String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+
+  payouts InvestmentPayout[]
 
   @@index([investorId, status])
   @@index([maturityDate])
 }
 
+model InvestmentPayout {
+  id           String       @id @default(auto()) @map("_id") @db.ObjectId
+  investmentId String       @db.ObjectId
+  investment   Investment   @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+  payoutNo     Int
+  dueDate      DateTime
+  principalDue Float        @default(0)
+  interestDue  Float        @default(0)
+  totalDue     Float
+  paidAmount   Float        @default(0)
+  status       PayoutStatus @default(PENDING)
+  paidAt       DateTime?
+  paymentMode  PaymentMode?
+  reference    String?
+  note         String?
+
+  @@unique([investmentId, payoutNo])
+  @@index([investmentId, dueDate])
+  @@index([dueDate, status])
+}
+
 // ─── Automatic Backup Snapshots ─────────────────────────────────────
 model BackupSnapshot {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  filename     String
-  url          String   // Cloudinary secure_url
-  publicId     String   // Cloudinary public_id (for deletion)
-  sizeBytes    Int
-  stats        Json     // { users: N, branches: N, ... }
-  trigger      String   @default("cron") // "cron" | "manual"
-  createdAt    DateTime @default(now())
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  filename  String
+  url       String // Cloudinary secure_url
+  publicId  String // Cloudinary public_id (for deletion)
+  sizeBytes Int
+  stats     Json // { users: N, branches: N, ... }
+  trigger   String   @default("cron") // "cron" | "manual"
+  createdAt DateTime @default(now())
 
   @@index([createdAt])
 }

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/badge";
 import { fmtDate } from "@/lib/dayjs";
 import { formatMoney } from "@/lib/formatters";
+import { IglBadge } from "@/components/ui/igl-badge";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,10 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
     },
   });
   if (!c) notFound();
+
+  // Build IGL serials: loans are ordered desc above, so serial = total - index.
+  const totalLoans = c.loans.length;
+  const loanSerial = (idx: number) => totalLoans - idx;
 
   return (
     <div className="space-y-6">
@@ -69,10 +74,13 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
             <p className="text-sm text-muted-foreground">No loans yet.</p>
           ) : (
             <ul className="divide-y">
-              {c.loans.map((l) => (
+              {c.loans.map((l, idx) => (
                 <li key={l.id} className="flex items-center justify-between py-3">
                   <div>
-                    <Link href={`/admin/loans/${l.id}`} className="font-mono text-sm font-medium hover:underline">{l.accountNo}</Link>
+                    <div className="flex items-center gap-2">
+                      <Link href={`/admin/loans/${l.id}`} className="font-mono text-sm font-medium hover:underline">{l.accountNo}</Link>
+                      <IglBadge serial={loanSerial(idx)} />
+                    </div>
                     <div className="text-xs text-muted-foreground">{l.loanType} · {formatMoney(l.principal)} · due {fmtDate(l.nextDueDate)}</div>
                   </div>
                   <StatusBadge status={l.status} />

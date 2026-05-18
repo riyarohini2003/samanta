@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge, StatusBadge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -110,9 +111,41 @@ export function ExistingCustomerLoan({
     notes: "",
   });
 
+  // Self-calculate mode state
+  const [selfCalc, setSelfCalc] = useState(false);
+  const [manualInterest, setManualInterest] = useState("");
+  const [manualTotal, setManualTotal] = useState("");
+  const [manualInstallment, setManualInstallment] = useState("");
+  // Track whether the user has manually overridden auto-filled fields.
+  const [processingFeeTouched, setProcessingFeeTouched] = useState(false);
+  const [installmentTouched, setInstallmentTouched] = useState(false);
+
+  // Auto EMI value derived from Total Payable ÷ Tenure Count.
+  const autoInstallment = useMemo(() => {
+    const total = Number(manualTotal);
+    const tenure = Number(form.tenureCount);
+    if (!total || !tenure) return "";
+    return String(Math.round(total / tenure));
+  }, [manualTotal, form.tenureCount]);
+
   function setF<K extends keyof typeof form>(k: K, v: string) {
     setForm((f) => ({ ...f, [k]: v }));
   }
+
+  // Self-calc: auto-fill processing fee = 5% of principal (unless user overrode it).
+  useEffect(() => {
+    if (!selfCalc || processingFeeTouched) return;
+    const p = Number(form.principal);
+    if (!p || !isFinite(p)) return;
+    const fee = Math.round(p * 0.05);
+    setForm((f) => (f.processingFee === String(fee) ? f : { ...f, processingFee: String(fee) }));
+  }, [selfCalc, form.principal, processingFeeTouched]);
+
+  // Self-calc: auto-derive EMI = Total Payable / Tenure Count (unless admin overrode it).
+  useEffect(() => {
+    if (!selfCalc || installmentTouched) return;
+    setManualInstallment(autoInstallment);
+  }, [selfCalc, autoInstallment, installmentTouched]);
 
   const filteredCustomers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -161,18 +194,29 @@ export function ExistingCustomerLoan({
     setStep(3);
   }
 
+  function resetSelfCalc() {
+    setSelfCalc(false);
+    setManualInterest("");
+    setManualTotal("");
+    setManualInstallment("");
+    setProcessingFeeTouched(false);
+    setInstallmentTouched(false);
+  }
+
   function goBackToSearch() {
     setStep(1);
     setSelectedCustomerId("");
     setEligibility(null);
     setSelectedLoanType("");
     setCalc(null);
+    resetSelfCalc();
   }
 
   function goBackToEligibility() {
     setStep(2);
     setSelectedLoanType("");
     setCalc(null);
+    resetSelfCalc();
   }
 
   // Live calculation
@@ -194,8 +238,8 @@ export function ExistingCustomerLoan({
   );
 
   useEffect(() => {
-    if (step !== 3 || !debounced.principal || !debounced.tenureCount) {
-      setCalc(null);
+    if (step !== 3 || selfCalc || !debounced.principal || !debounced.tenureCount) {
+      if (!selfCalc) setCalc(null);
       return;
     }
     fetch("/api/v1/loan-applications/calculate", {
@@ -206,7 +250,7 @@ export function ExistingCustomerLoan({
       .then((r) => r.json())
       .then((j) => { if (j.data) setCalc(j.data); })
       .catch(() => {});
-  }, [debounced, step]);
+  }, [debounced, step, selfCalc]);
 
   const [savingDraft, setSavingDraft] = useState(false);
 
@@ -225,6 +269,14 @@ export function ExistingCustomerLoan({
           customerId: selectedCustomerId,
           loanType: selectedLoanType,
           ...form,
+          ...(selfCalc
+            ? {
+                selfCalculate: true,
+                interestAmount: manualInterest ? Number(manualInterest) : undefined,
+                totalPayable: manualTotal ? Number(manualTotal) : undefined,
+                installmentAmount: manualInstallment ? Number(manualInstallment) : undefined,
+              }
+            : {}),
           asDraft,
         }),
       });
@@ -486,30 +538,27 @@ export function ExistingCustomerLoan({
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 sm:grid-cols-3">
-              {types.map((t) => (
-                <div
-                  key={t.type}
-                  className={
-                    "relative rounded-lg border p-4 transition-colors " +
-                    (t.eligible
-                      ? "border-border hover:border-primary cursor-pointer"
-                      : "border-border bg-muted/40 opacity-70")
-                  }
-                >
-                  <div className="mb-2 flex items-center justify-between">
-                    <h4 className="text-sm font-semibold">{t.type} Loan</h4>
-                    {t.eligible ? (
+              {types.map((t) => {
+                const hasExisting = t.activeLoans.length > 0 || t.pendingApps.length > 0;
+                return (
+                  <div
+                    key={t.type}
+                    className="relative rounded-lg border border-border p-4 transition-colors hover:border-primary"
+                  >
+                    <div className="mb-2 flex items-center justify-between">
+                      <h4 className="text-sm font-semibold">{t.type} Loan</h4>
                       <CheckCircle2 className="h-5 w-5 text-green-600" />
-                    ) : (
-                      <XCircle className="h-5 w-5 text-destructive" />
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      {t.type === "DAILY" && "Repayment collected daily"}
+                      {t.type === "WEEKLY" && "Repayment collected weekly"}
+                      {t.type === "MONTHLY" && "Repayment collected monthly"}
+                    </p>
+                    {hasExisting && (
+                      <p className="mb-3 text-xs text-amber-600 font-medium">
+                        Note: {t.reason}
+                      </p>
                     )}
-                  </div>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    {t.type === "DAILY" && "Repayment collected daily"}
-                    {t.type === "WEEKLY" && "Repayment collected weekly"}
-                    {t.type === "MONTHLY" && "Repayment collected monthly"}
-                  </p>
-                  {t.eligible ? (
                     <Button
                       size="sm"
                       className="w-full"
@@ -517,11 +566,9 @@ export function ExistingCustomerLoan({
                     >
                       Apply {t.type} Loan
                     </Button>
-                  ) : (
-                    <p className="text-xs text-destructive font-medium">{t.reason}</p>
-                  )}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -566,43 +613,161 @@ export function ExistingCustomerLoan({
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="lg:col-span-2">
             <CardHeader>
-              <CardTitle>Loan Application — {selectedLoanType} Type</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Loan Application — {selectedLoanType} Type</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={selfCalc}
+                    onCheckedChange={(checked) => {
+                      setSelfCalc(checked);
+                      if (!checked) {
+                        setManualInterest("");
+                        setManualTotal("");
+                        setManualInstallment("");
+                        setProcessingFeeTouched(false);
+                        setInstallmentTouched(false);
+                        setCalc(null);
+                      }
+                    }}
+                  />
+                  <label
+                    className="cursor-pointer text-sm font-medium"
+                    onClick={() => {
+                      const next = !selfCalc;
+                      setSelfCalc(next);
+                      if (!next) {
+                        setManualInterest("");
+                        setManualTotal("");
+                        setManualInstallment("");
+                        setProcessingFeeTouched(false);
+                        setCalc(null);
+                      }
+                    }}
+                  >
+                    Self Calculate
+                  </label>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Interest Method *</Label>
-                  <Select value={form.interestMethod} onChange={(e) => setF("interestMethod", e.target.value as any)}>
-                    <option value="SIMPLE">Simple Interest</option>
-                    <option value="COMPOUND">Compound Interest</option>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Rate Period *</Label>
-                  <Select value={form.ratePeriod} onChange={(e) => setF("ratePeriod", e.target.value as any)}>
-                    <option value="WEEKLY">Weekly</option>
-                    <option value="MONTHLY">Monthly</option>
-                    <option value="ANNUAL">Annually</option>
-                  </Select>
-                </div>
+                {!selfCalc && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Interest Method *</Label>
+                      <Select value={form.interestMethod} onChange={(e) => setF("interestMethod", e.target.value as any)}>
+                        <option value="SIMPLE">Simple Interest</option>
+                        <option value="COMPOUND">Compound Interest</option>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Rate Period *</Label>
+                      <Select value={form.ratePeriod} onChange={(e) => setF("ratePeriod", e.target.value as any)}>
+                        <option value="WEEKLY">Weekly</option>
+                        <option value="MONTHLY">Monthly</option>
+                        <option value="ANNUAL">Annually</option>
+                      </Select>
+                    </div>
+                  </>
+                )}
 
                 <div className="space-y-2">
                   <Label>Principal Amount *</Label>
                   <Input required type="number" value={form.principal} onChange={(e) => setF("principal", e.target.value)} />
                 </div>
-                <div className="space-y-2">
-                  <Label>Interest Rate % ({ratePeriodLabel}) *</Label>
-                  <Input required type="number" step="0.01" value={form.interestRate} onChange={(e) => setF("interestRate", e.target.value)} />
-                </div>
+                {!selfCalc && (
+                  <div className="space-y-2">
+                    <Label>Interest Rate % ({ratePeriodLabel}) *</Label>
+                    <Input required type="number" step="0.01" value={form.interestRate} onChange={(e) => setF("interestRate", e.target.value)} />
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label>Tenure ({tenureUnitLabel}) *</Label>
                   <Input required type="number" value={form.tenureCount} onChange={(e) => setF("tenureCount", e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Processing Fee</Label>
-                  <Input type="number" value={form.processingFee} onChange={(e) => setF("processingFee", e.target.value)} />
+                  <Label>
+                    Processing Fee
+                    {selfCalc && (
+                      <span className="ml-1 text-xs text-muted-foreground">(auto: 5% of principal)</span>
+                    )}
+                  </Label>
+                  <Input
+                    type="number"
+                    value={form.processingFee}
+                    onChange={(e) => {
+                      setF("processingFee", e.target.value);
+                      if (selfCalc) setProcessingFeeTouched(true);
+                    }}
+                  />
                 </div>
+
+                {selfCalc && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Interest Amount *</Label>
+                      <Input
+                        required
+                        type="number"
+                        placeholder="Enter interest amount"
+                        value={manualInterest}
+                        onChange={(e) => {
+                          setManualInterest(e.target.value);
+                          if (form.principal && e.target.value) {
+                            setManualTotal(String(Number(form.principal) + Number(e.target.value)));
+                          } else if (!e.target.value) {
+                            setManualTotal("");
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Total Payable *</Label>
+                      <Input
+                        required
+                        type="number"
+                        placeholder="Principal + Interest"
+                        value={manualTotal}
+                        onChange={(e) => setManualTotal(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label>
+                          EMI / Installment *
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            {installmentTouched
+                              ? "(manual override)"
+                              : "(auto: Total Payable ÷ Tenure)"}
+                          </span>
+                        </Label>
+                        {installmentTouched && autoInstallment && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setInstallmentTouched(false);
+                              setManualInstallment(autoInstallment);
+                            }}
+                            className="text-xs font-medium text-primary hover:underline"
+                          >
+                            Reset to auto ({formatMoney(Number(autoInstallment))})
+                          </button>
+                        )}
+                      </div>
+                      <Input
+                        required
+                        type="number"
+                        placeholder="Auto-calculated"
+                        value={manualInstallment}
+                        onChange={(e) => {
+                          setManualInstallment(e.target.value);
+                          setInstallmentTouched(true);
+                        }}
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div className="space-y-2">
                   <Label>Application Date *</Label>
@@ -644,7 +809,21 @@ export function ExistingCustomerLoan({
               <CardTitle>Loan Preview</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {!calc ? (
+              {selfCalc ? (
+                form.principal ? (
+                  <>
+                    <Row label="Mode" value="Self Calculate" />
+                    <Row label="Loan Type" value={selectedLoanType} />
+                    <Row label="Principal" value={formatMoney(Number(form.principal))} />
+                    <Row label="Processing Fee" value={form.processingFee ? formatMoney(Number(form.processingFee)) : "—"} />
+                    <Row label="Interest" value={manualInterest ? formatMoney(Number(manualInterest)) : "—"} />
+                    <Row label="Total Payable" value={manualTotal ? formatMoney(Number(manualTotal)) : "—"} strong />
+                    <Row label="Installment" value={manualInstallment ? formatMoney(Number(manualInstallment)) : "—"} strong />
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Enter loan details to preview…</p>
+                )
+              ) : !calc ? (
                 <p className="text-sm text-muted-foreground">Enter loan details to see calculation...</p>
               ) : (
                 <>

@@ -2,12 +2,13 @@ import { z } from "zod";
 
 export const dueListQuerySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   branchId: z.string().optional(),
   employeeId: z.string().optional(),
   loanType: z.enum(["DAILY", "WEEKLY", "MONTHLY"]).optional(),
   status: z.enum(["ALL", "PENDING", "PAID", "PARTIAL", "MISSED"]).optional().default("ALL"),
   q: z.string().optional(),
-  mode: z.enum(["DUE_ON", "DUE_UPTO"]).optional().default("DUE_ON"),
+  mode: z.enum(["DUE_ON", "DUE_UPTO", "DUE_BETWEEN"]).optional().default("DUE_ON"),
 });
 
 export const paymentCreateSchema = z.object({

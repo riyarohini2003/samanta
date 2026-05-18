@@ -53,6 +53,18 @@ export async function POST(req: NextRequest) {
     const calc = calculateLoan({ ...body, startDate: body.startDate });
     const applicationNo = await nextApplicationNo();
     const isDraft = body.asDraft === true;
+    const isSelfCalc = body.selfCalculate === true;
+
+    const finalInterest =
+      isSelfCalc && body.interestAmount != null ? body.interestAmount : calc.interestAmount;
+    const finalTotal =
+      isSelfCalc && body.totalPayable != null ? body.totalPayable : calc.totalPayable;
+    const finalInstallment =
+      body.installmentAmount != null
+        ? body.installmentAmount
+        : isSelfCalc
+        ? Math.round(finalTotal / body.tenureCount)
+        : calc.installmentAmount;
 
     const app = await prisma.loanApplication.create({
       data: {
@@ -64,9 +76,9 @@ export async function POST(req: NextRequest) {
         interestRate: body.interestRate,
         processingFee: calc.processingFee,
         tenureCount: body.tenureCount,
-        installmentAmount: calc.installmentAmount,
-        totalPayable: calc.totalPayable,
-        interestAmount: calc.interestAmount,
+        installmentAmount: finalInstallment,
+        totalPayable: finalTotal,
+        interestAmount: finalInterest,
         startDate: calc.startDate,
         maturityDate: calc.maturityDate,
         purpose: body.purpose,

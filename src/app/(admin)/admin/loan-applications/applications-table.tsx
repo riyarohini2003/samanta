@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/badge";
+import { IglBadge } from "@/components/ui/igl-badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Pencil, Trash2, FileDown, Printer, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -26,6 +27,7 @@ export interface ApplicationRow {
   status: string;
   createdAt: Date | string;
   customer: { customerCode: string; fullName: string; mobile: string };
+  iglSerial?: number;
   branch: { code: string; name: string };
   createdBy: { name: string };
 }
@@ -135,7 +137,10 @@ export default function ApplicationsTable({ apps }: { apps: ApplicationRow[] }) 
                   </Link>
                 </TableCell>
                 <TableCell className="font-medium">
-                  {a.customer.fullName}
+                  <div className="flex items-center gap-2">
+                    <span>{a.customer.fullName}</span>
+                    <IglBadge serial={a.iglSerial} />
+                  </div>
                   <div className="text-xs text-muted-foreground">{a.customer.mobile}</div>
                 </TableCell>
                 <TableCell>{a.loanType}</TableCell>

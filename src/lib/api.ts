@@ -66,7 +66,14 @@ export function serverError(e: unknown) {
 
 export function handleError(e: unknown) {
   if (e instanceof ZodError) {
-    return badRequest("Validation failed", e.flatten());
+    const first = e.issues[0];
+    const path = first?.path?.join(".");
+    const message = first
+      ? path
+        ? `${path}: ${first.message}`
+        : first.message
+      : "Validation failed";
+    return badRequest(message, e.flatten());
   }
   if (e instanceof Error && "code" in e) {
     const code = (e as any).code;

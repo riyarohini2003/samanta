@@ -1,6 +1,7 @@
 import type { CurrentUser } from "@/server/auth/session";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MobileSidebarTrigger } from "@/components/layout/sidebar";
+import { DesktopSidebarToggle } from "@/components/layout/layout-shell";
 import { formatRole } from "@/lib/constants";
 
 export function Topbar({
@@ -15,7 +16,8 @@ export function Topbar({
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-border/50 bg-background/80 px-4 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 md:px-6">
       <div className="flex min-w-0 items-center gap-2">
-        <MobileSidebarTrigger variant={variant} />
+        <MobileSidebarTrigger variant={variant} role={user.role} />
+        <DesktopSidebarToggle />
         <h1 className="truncate text-lg font-semibold tracking-tight">
           {title ?? "Samanta LMS"}
         </h1>

@@ -11,6 +11,7 @@ export async function disburseApplication(params: {
   assignedEmployeeId: string;
   disbursementMode: DisbursementMode;
   disbursedAt?: Date;
+  firstDueDate?: Date;
   actorUserId: string;
   ip?: string | null;
   userAgent?: string | null;
@@ -31,8 +32,13 @@ export async function disburseApplication(params: {
     const accountNo = await nextLoanAccountNo(tx);
     const disbursedAt = params.disbursedAt ?? new Date();
 
-    // Use disbursement date as the loan start date and recalculate maturity
-    const startDate = dayjs.utc(disbursedAt).startOf("day").toDate();
+    // Schedule starts on the admin-selected first collection date, or
+    // falls back to the disbursement date when none is provided.
+    const scheduleStart = params.firstDueDate ?? disbursedAt;
+    const startDate = dayjs.utc(scheduleStart).startOf("day").toDate();
+    if (startDate < dayjs.utc(disbursedAt).startOf("day").toDate()) {
+      throw new Error("First collection date cannot be before the disbursement date");
+    }
     const maturityDate = addUnits(
       dayjs.utc(startDate),
       app.loanType,

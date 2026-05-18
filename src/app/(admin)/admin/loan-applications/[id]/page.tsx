@@ -5,11 +5,16 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/badge";
+import { IglBadge } from "@/components/ui/igl-badge";
+import { getApplicationSerial } from "@/server/services/igl-serial";
 import { fmtDate, fmtDateTime } from "@/lib/dayjs";
 import { formatMoney } from "@/lib/formatters";
 import { ReviewActions } from "./review-actions";
+import { LoanDetailsEditable } from "./loan-details-editable";
 
 export const dynamic = "force-dynamic";
+
+const EDITABLE_STATUSES = new Set(["DRAFT", "SUBMITTED", "UNDER_REVIEW", "SENT_BACK"]);
 
 export default async function ApplicationDetailPage({ params }: { params: { id: string } }) {
   const app = await prisma.loanApplication.findUnique({
@@ -25,6 +30,8 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
   });
   if (!app) notFound();
 
+  const iglSerial = await getApplicationSerial(app.id);
+
   const employees = await prisma.user.findMany({
     where: { branchId: app.branchId, deletedAt: { isSet: false }, isActive: true, role: { in: ["EMPLOYEE", "BRANCH_MANAGER"] } },
     select: { id: true, name: true, employeeCode: true },
@@ -34,7 +41,12 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
   return (
     <div className="space-y-6">
       <PageHeader
-        title={app.applicationNo}
+        title={
+          <span className="inline-flex items-center gap-2">
+            {app.applicationNo}
+            <IglBadge serial={iglSerial} />
+          </span>
+        }
         description={`${app.customer.fullName} · ${app.branch.name}`}
         actions={
           <div className="flex gap-2">
@@ -49,24 +61,38 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
         <span className="text-sm text-muted-foreground">Created {fmtDateTime(app.createdAt)} by {app.createdBy.name}</span>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader><CardTitle>Loan Details</CardTitle></CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            <Row label="Loan Type" value={app.loanType} />
-            <Row label="Tenure" value={`${app.tenureCount} installments`} />
-            <Row label="Principal" value={formatMoney(app.principal)} />
-            <Row label="Interest Rate" value={`${app.interestRate}%`} />
-            <Row label="Interest Amount" value={formatMoney(app.interestAmount)} />
-            <Row label="Processing Fee" value={formatMoney(app.processingFee)} />
-            <Row label="Installment" value={formatMoney(app.installmentAmount)} strong />
-            <Row label="Total Payable" value={formatMoney(app.totalPayable)} strong />
-            <Row label="Start Date" value={fmtDate(app.startDate)} />
-            <Row label="Maturity" value={fmtDate(app.maturityDate)} />
-            <Row label="Purpose" value={app.purpose ?? "—"} wide />
-            <Row label="Notes" value={app.notes ?? "—"} wide />
+      {app.loanAccount ? (
+        <Card className="border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+          <CardHeader><CardTitle>Disbursed as {app.loanAccount.accountNo}</CardTitle></CardHeader>
+          <CardContent>
+            <Button asChild><Link href={`/admin/loans/${app.loanAccount.id}`}>View Loan Account</Link></Button>
           </CardContent>
         </Card>
+      ) : (
+        <ReviewActions appId={app.id} status={app.status} employees={employees} />
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <LoanDetailsEditable
+            canEdit={EDITABLE_STATUSES.has(app.status) && !app.loanAccount}
+            app={{
+              id: app.id,
+              loanType: app.loanType as "DAILY" | "WEEKLY" | "MONTHLY",
+              principal: app.principal,
+              interestRate: app.interestRate,
+              processingFee: app.processingFee,
+              tenureCount: app.tenureCount,
+              installmentAmount: app.installmentAmount,
+              totalPayable: app.totalPayable,
+              interestAmount: app.interestAmount,
+              startDate: app.startDate,
+              maturityDate: app.maturityDate,
+              purpose: app.purpose,
+              notes: app.notes,
+            }}
+          />
+        </div>
 
         <Card>
           <CardHeader><CardTitle>Customer</CardTitle></CardHeader>
@@ -127,16 +153,6 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
         </Card>
       )}
 
-      {app.loanAccount ? (
-        <Card className="border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10">
-          <CardHeader><CardTitle>Disbursed as {app.loanAccount.accountNo}</CardTitle></CardHeader>
-          <CardContent>
-            <Button asChild><Link href={`/admin/loans/${app.loanAccount.id}`}>View Loan Account</Link></Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <ReviewActions appId={app.id} status={app.status} employees={employees} />
-      )}
     </div>
   );
 }

@@ -96,7 +96,11 @@ export default async function InvestorDetailPage({ params }: { params: { id: str
                 <tbody>
                   {investor.investments.map((inv) => (
                     <tr key={inv.id} className="border-b last:border-0">
-                      <td className="py-3 pr-4 font-mono text-xs">{inv.investmentCode}</td>
+                      <td className="py-3 pr-4 font-mono text-xs">
+                        <Link href={`/admin/investments/${inv.id}`} className="text-primary hover:underline">
+                          {inv.investmentCode}
+                        </Link>
+                      </td>
                       <td className="py-3 pr-4 font-semibold">{formatMoney(inv.principalAmount)}</td>
                       <td className="py-3 pr-4">{inv.interestRate}%</td>
                       <td className="py-3 pr-4">{inv.tenureMonths} months</td>
@@ -107,7 +111,12 @@ export default async function InvestorDetailPage({ params }: { params: { id: str
                       <td className="py-3 pr-4">{fmtDate(inv.maturityDate)}</td>
                       <td className="py-3 pr-4"><StatusBadge status={inv.status} /></td>
                       <td className="py-3">
-                        <InvestmentActions investmentId={inv.id} status={inv.status} />
+                        <div className="flex items-center gap-2">
+                          <Button asChild size="sm" variant="outline">
+                            <Link href={`/admin/investments/${inv.id}`}>Open</Link>
+                          </Button>
+                          <InvestmentActions investmentId={inv.id} status={inv.status} />
+                        </div>
                       </td>
                     </tr>
                   ))}

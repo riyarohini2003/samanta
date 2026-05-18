@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Camera, RefreshCw, Upload, X, Loader2 } from "lucide-react";
+import { Camera, RefreshCw, Upload, X, Loader2, Crop } from "lucide-react";
+import { ImageCropper } from "@/components/ui/image-cropper";
 
 export function PhotoCapture({
   value,
@@ -22,9 +23,13 @@ export function PhotoCapture({
 
   const [liveOpen, setLiveOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [editSrc, setEditSrc] = useState<string | null>(null);
 
   useEffect(() => {
-    return () => stopStream();
+    return () => {
+      stopStream();
+      if (editSrc) URL.revokeObjectURL(editSrc);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -46,7 +51,6 @@ export function PhotoCapture({
       });
       streamRef.current = stream;
       setLiveOpen(true);
-      // Wait for render before attaching stream
       setTimeout(() => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -75,13 +79,15 @@ export function PhotoCapture({
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, w, h);
     canvas.toBlob(
-      async (blob) => {
+      (blob) => {
         if (!blob) return;
-        await uploadBlob(blob, "photo.jpg");
-        closeCamera();
+        // Stop the camera and open the cropper instead of uploading immediately.
+        stopStream();
+        setLiveOpen(false);
+        setEditSrc(URL.createObjectURL(blob));
       },
       "image/jpeg",
-      0.9
+      0.92
     );
   }
 
@@ -107,15 +113,46 @@ export function PhotoCapture({
   async function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
-    await uploadBlob(f, f.name);
     e.target.value = "";
+    // Send through the cropper too.
+    setEditSrc(URL.createObjectURL(f));
+  }
+
+  async function handleCropDone(blob: Blob) {
+    const url = editSrc;
+    setEditSrc(null);
+    if (url) URL.revokeObjectURL(url);
+    await uploadBlob(blob, "photo.jpg");
+  }
+
+  function handleCropCancel() {
+    if (editSrc) URL.revokeObjectURL(editSrc);
+    setEditSrc(null);
+  }
+
+  async function editExisting() {
+    if (!value) return;
+    try {
+      const res = await fetch(value);
+      const blob = await res.blob();
+      setEditSrc(URL.createObjectURL(blob));
+    } catch {
+      toast.error("Could not load image for editing");
+    }
   }
 
   return (
     <div className="space-y-3">
       <div className="text-sm font-medium">{label}</div>
 
-      {value ? (
+      {editSrc ? (
+        <ImageCropper
+          src={editSrc}
+          aspect={3 / 4}
+          onCrop={handleCropDone}
+          onCancel={handleCropCancel}
+        />
+      ) : value ? (
         <div className="flex items-start gap-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -126,6 +163,9 @@ export function PhotoCapture({
           <div className="flex flex-col gap-2">
             <Button type="button" variant="outline" size="sm" onClick={startCamera}>
               <RefreshCw className="h-4 w-4" /> Retake
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={editExisting}>
+              <Crop className="h-4 w-4" /> Edit / Crop
             </Button>
             <Button
               type="button"
