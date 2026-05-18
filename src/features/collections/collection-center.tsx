@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState, useEffect, useCallback, useMemo, useTransition, type SelectHTMLAttributes } from "react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,9 +14,9 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Wallet, Users, AlertCircle, CheckCircle, Loader2, Search, Clock, ChevronDown } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, randomId } from "@/lib/utils";
 import { formatMoney } from "@/lib/formatters";
-import { fmtDate } from "@/lib/dayjs";
+import dayjs, { fmtDate } from "@/lib/dayjs";
 
 type Branch = { id: string; code: string; name: string };
 type Employee = { id: string; name: string; employeeCode: string };
@@ -248,6 +249,7 @@ export function CollectionCenter({
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12 text-right">#</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Account</TableHead>
                 <TableHead>Type</TableHead>
@@ -265,7 +267,7 @@ export function CollectionCenter({
             <TableBody>
               {isPending && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={12} className="py-12 text-center text-muted-foreground">
+                  <TableCell colSpan={13} className="py-12 text-center text-muted-foreground">
                     <div className="flex items-center justify-center gap-2">
                       <Loader2 className="h-5 w-5 animate-spin" />
                       <span>Loading collections…</span>
@@ -273,12 +275,13 @@ export function CollectionCenter({
                   </TableCell>
                 </TableRow>
               )}
-              {rows.map((r) => {
+              {rows.map((r, idx) => {
                 const due = Number(r.dueAmount);
                 const paid = Number(r.paidAmount);
                 const pending = Math.max(due - paid, 0);
                 return (
                   <TableRow key={r.id}>
+                    <TableCell className="text-right text-sm text-muted-foreground">{idx + 1}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2 font-medium">
                         <span>{r.loanAccount.customer.fullName}</span>
@@ -286,16 +289,33 @@ export function CollectionCenter({
                       </div>
                       <div className="text-xs text-muted-foreground">{r.loanAccount.customer.mobile}</div>
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{r.loanAccount.accountNo}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      <Link
+                        href={`/${scope}/loans/${r.loanAccount.id}`}
+                        className="hover:underline"
+                      >
+                        {r.loanAccount.accountNo}
+                      </Link>
+                    </TableCell>
                     <TableCell><StatusBadge status={r.loanAccount.loanType} /></TableCell>
                     <TableCell className="text-sm">{r.loanAccount.branch.name}</TableCell>
                     <TableCell className="text-sm">{r.loanAccount.assignedEmployee?.name ?? "—"}</TableCell>
                     <TableCell className="text-right font-medium">{formatMoney(due)}</TableCell>
                     <TableCell className="text-right">{formatMoney(paid)}</TableCell>
                     <TableCell className="text-right font-semibold">{formatMoney(pending)}</TableCell>
-                    <TableCell>{fmtDate(r.dueDate)}</TableCell>
+                    <TableCell>
+                      <div>{fmtDate(r.dueDate)}</div>
+                      <div className="text-xs text-muted-foreground">{dayjs(r.dueDate).format("dddd")}</div>
+                    </TableCell>
                     <TableCell className={r.paidAt ? "text-sm" : "text-sm text-muted-foreground"}>
-                      {r.paidAt ? fmtDate(r.paidAt) : "—"}
+                      {r.paidAt ? (
+                        <>
+                          <div>{fmtDate(r.paidAt)}</div>
+                          <div className="text-xs text-muted-foreground">{dayjs(r.paidAt).format("dddd")}</div>
+                        </>
+                      ) : (
+                        "—"
+                      )}
                     </TableCell>
                     <TableCell><StatusBadge status={r.status} /></TableCell>
                     <TableCell className="text-right">
@@ -309,7 +329,7 @@ export function CollectionCenter({
                 );
               })}
               {rows.length === 0 && !isPending && (
-                <TableRow><TableCell colSpan={12} className="py-12 text-center text-muted-foreground">No dues found for the selected filters.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={13} className="py-12 text-center text-muted-foreground">No dues found for the selected filters.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -347,7 +367,7 @@ function CollectDialog({
   async function submit() {
     setLoading(true);
     try {
-      const clientRef = crypto.randomUUID();
+      const clientRef = randomId();
       const res = await fetch("/api/v1/collections/pay", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -662,7 +662,10 @@ export function ExistingCustomerLoan({
                     </div>
                     <div className="space-y-2">
                       <Label>Rate Period *</Label>
-                      <Select value={form.ratePeriod} onChange={(e) => setF("ratePeriod", e.target.value as any)}>
+                      <Select
+                        value={form.ratePeriod}
+                        onChange={(e) => setF("ratePeriod", e.target.value as any)}
+                      >
                         <option value="WEEKLY">Weekly</option>
                         <option value="MONTHLY">Monthly</option>
                         <option value="ANNUAL">Annually</option>

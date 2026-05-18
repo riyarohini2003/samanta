@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +21,15 @@ const toDateTime = (iso: string | null) => {
   if (isNaN(d.getTime())) return "";
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const weekdayOf = (value: string) => {
+  if (!value) return "";
+  const iso = value.length === 10 ? `${value}T00:00:00` : value;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? "" : WEEKDAYS[d.getDay()];
 };
 
 export type InstallmentStatus = "PENDING" | "PAID" | "PARTIAL" | "MISSED" | "SKIPPED";
@@ -61,9 +70,11 @@ function toRowState(s: ScheduleRowValues): RowState {
 export default function ScheduleEditor({
   loanAccountId,
   initial,
+  syncedDueDates,
 }: {
   loanAccountId: string;
   initial: ScheduleRowValues[];
+  syncedDueDates?: Record<string, string>;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<Record<string, RowState>>(() =>
@@ -74,6 +85,21 @@ export default function ScheduleEditor({
   function set(id: string, patch: Partial<RowState>) {
     setRows((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
   }
+
+  useEffect(() => {
+    if (!syncedDueDates) return;
+    setRows((prev) => {
+      let changed = false;
+      const next: Record<string, RowState> = { ...prev };
+      for (const [id, date] of Object.entries(syncedDueDates)) {
+        if (next[id] && next[id].dueDate !== date) {
+          next[id] = { ...next[id], dueDate: date };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [syncedDueDates]);
 
   async function save(id: string) {
     const r = rows[id];
@@ -106,10 +132,55 @@ export default function ScheduleEditor({
     }
   }
 
+  const [savingAll, setSavingAll] = useState(false);
+
+  async function saveAll() {
+    setSavingAll(true);
+    try {
+      const entries = Object.entries(rows);
+      const results = await Promise.allSettled(
+        entries.map(async ([id, r]) => {
+          const payload = {
+            installmentNo: Number(r.installmentNo),
+            dueDate: r.dueDate ? new Date(r.dueDate).toISOString() : undefined,
+            dueAmount: Number(r.dueAmount),
+            paidAmount: Number(r.paidAmount),
+            paidAt: r.paidAt ? new Date(r.paidAt).toISOString() : null,
+            status: r.status,
+            penaltyAmount: Number(r.penaltyAmount),
+          };
+          const res = await fetch(`/api/v1/loans/${loanAccountId}/schedule/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) {
+            const json = await res.json().catch(() => ({}));
+            throw new Error(json?.error || `Installment #${r.installmentNo} failed`);
+          }
+        }),
+      );
+      const failed = results.filter((x) => x.status === "rejected") as PromiseRejectedResult[];
+      const okCount = results.length - failed.length;
+      if (failed.length === 0) {
+        toast.success(`Saved ${okCount} installments`);
+      } else {
+        toast.error(`${okCount} saved, ${failed.length} failed: ${failed[0].reason?.message ?? "unknown"}`);
+      }
+      router.refresh();
+    } finally {
+      setSavingAll(false);
+    }
+  }
+
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle>Schedule (EMIs) — raw override</CardTitle>
+        <Button onClick={saveAll} disabled={savingAll || initial.length === 0} size="sm">
+          {savingAll ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
+          Save All
+        </Button>
       </CardHeader>
       <CardContent className="p-0">
         <Table>
@@ -147,6 +218,11 @@ export default function ScheduleEditor({
                       onChange={(e) => set(s.id, { dueDate: e.target.value })}
                       className="h-8"
                     />
+                    {weekdayOf(r.dueDate) && (
+                      <div className="mt-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        {weekdayOf(r.dueDate)}
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Input
@@ -173,6 +249,11 @@ export default function ScheduleEditor({
                       onChange={(e) => set(s.id, { paidAt: e.target.value })}
                       className="h-8"
                     />
+                    {weekdayOf(r.paidAt) && (
+                      <div className="mt-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        {weekdayOf(r.paidAt)}
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Select

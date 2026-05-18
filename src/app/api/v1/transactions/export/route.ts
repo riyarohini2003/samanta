@@ -70,7 +70,8 @@ export async function GET(req: NextRequest) {
           disbursementMode: true,
           loanType: true,
           maturityDate: true,
-          application: { select: { processingFee: true, interestRate: true } },
+          processingFee: true,
+          application: { select: { interestRate: true } },
           customer: {
             select: { fullName: true, customerCode: true, mobile: true },
           },
@@ -114,7 +115,7 @@ export async function GET(req: NextRequest) {
       interest: toNumber(l.interestAmount),
       totalPayable: toNumber(l.totalPayable),
       emi: toNumber(l.installmentAmount),
-      processingFee: toNumber(l.application?.processingFee),
+      processingFee: toNumber(l.processingFee),
       interestRate: toNumber(l.application?.interestRate),
       maturity: l.maturityDate
         ? dayjs(l.maturityDate).format("DD MMM YYYY")

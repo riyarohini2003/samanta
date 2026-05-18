@@ -13,6 +13,8 @@ import { fmtDate } from "@/lib/dayjs";
 import { formatMoney } from "@/lib/formatters";
 
 type LoanType = "DAILY" | "WEEKLY" | "MONTHLY";
+type InterestMethod = "SIMPLE" | "COMPOUND";
+type RatePeriod = "WEEKLY" | "MONTHLY" | "ANNUAL";
 
 export interface LoanDetailsInitial {
   id: string;
@@ -28,6 +30,8 @@ export interface LoanDetailsInitial {
   maturityDate: Date | string;
   purpose?: string | null;
   notes?: string | null;
+  interestMethod?: InterestMethod | null;
+  ratePeriod?: RatePeriod | null;
 }
 
 type CalcPreview = {
@@ -36,6 +40,7 @@ type CalcPreview = {
   totalPayable: number;
   installmentAmount: number;
   maturityDate: string;
+  effectiveAnnualRate?: number;
 } | null;
 
 const toDateStr = (v: Date | string) => {
@@ -55,35 +60,41 @@ export function LoanDetailsEditable({
   const [saving, setSaving] = useState(false);
   const [calc, setCalc] = useState<CalcPreview>(null);
 
-  const [form, setForm] = useState({
+  const initialForm = {
     loanType: app.loanType,
     principal: String(app.principal),
     interestRate: String(app.interestRate),
+    interestMethod: (app.interestMethod ?? "SIMPLE") as InterestMethod,
+    ratePeriod: (app.ratePeriod ?? "ANNUAL") as RatePeriod,
     processingFee: String(app.processingFee),
     tenureCount: String(app.tenureCount),
     startDate: toDateStr(app.startDate),
     purpose: app.purpose ?? "",
     notes: app.notes ?? "",
-  });
+  };
 
-  function set<K extends keyof typeof form>(k: K, v: string) {
+  const [form, setForm] = useState(initialForm);
+  const [override, setOverride] = useState(false);
+  const [overrideInstallment, setOverrideInstallment] = useState(String(app.installmentAmount));
+  const [overrideTotalPayable, setOverrideTotalPayable] = useState(String(app.totalPayable));
+
+  function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
   function reset() {
-    setForm({
-      loanType: app.loanType,
-      principal: String(app.principal),
-      interestRate: String(app.interestRate),
-      processingFee: String(app.processingFee),
-      tenureCount: String(app.tenureCount),
-      startDate: toDateStr(app.startDate),
-      purpose: app.purpose ?? "",
-      notes: app.notes ?? "",
-    });
+    setForm(initialForm);
+    setOverride(false);
+    setOverrideInstallment(String(app.installmentAmount));
+    setOverrideTotalPayable(String(app.totalPayable));
     setCalc(null);
     setEditing(false);
   }
+
+  const tenureUnitLabel =
+    form.loanType === "DAILY" ? "day(s)" : form.loanType === "WEEKLY" ? "week(s)" : "month(s)";
+  const ratePeriodLabel =
+    form.ratePeriod === "WEEKLY" ? "per week" : form.ratePeriod === "MONTHLY" ? "per month" : "per year";
 
   const previewKey = useMemo(
     () =>
@@ -94,8 +105,19 @@ export function LoanDetailsEditable({
         l: form.loanType,
         f: form.processingFee,
         d: form.startDate,
+        m: form.interestMethod,
+        rp: form.ratePeriod,
       }),
-    [form.principal, form.interestRate, form.tenureCount, form.loanType, form.processingFee, form.startDate]
+    [
+      form.principal,
+      form.interestRate,
+      form.tenureCount,
+      form.loanType,
+      form.processingFee,
+      form.startDate,
+      form.interestMethod,
+      form.ratePeriod,
+    ]
   );
 
   useEffect(() => {
@@ -118,8 +140,8 @@ export function LoanDetailsEditable({
           loanType: form.loanType,
           processingFee: Number(form.processingFee),
           startDate: form.startDate,
-          interestMethod: "SIMPLE",
-          ratePeriod: "ANNUAL",
+          interestMethod: form.interestMethod,
+          ratePeriod: form.ratePeriod,
         }),
         signal: ctrl.signal,
       })
@@ -133,7 +155,16 @@ export function LoanDetailsEditable({
       ctrl.abort();
       clearTimeout(t);
     };
-  }, [editing, previewKey, form.interestRate, form.loanType, form.processingFee, form.startDate]);
+  }, [
+    editing,
+    previewKey,
+    form.interestRate,
+    form.loanType,
+    form.processingFee,
+    form.startDate,
+    form.interestMethod,
+    form.ratePeriod,
+  ]);
 
   async function save() {
     setSaving(true);
@@ -150,8 +181,14 @@ export function LoanDetailsEditable({
           startDate: form.startDate,
           purpose: form.purpose || undefined,
           notes: form.notes || undefined,
-          interestMethod: "SIMPLE",
-          ratePeriod: "ANNUAL",
+          interestMethod: form.interestMethod,
+          ratePeriod: form.ratePeriod,
+          ...(override
+            ? {
+                installmentAmount: overrideInstallment,
+                totalPayable: overrideTotalPayable,
+              }
+            : {}),
         }),
       });
       const json = await res.json();
@@ -215,24 +252,29 @@ export function LoanDetailsEditable({
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-2">
         <div className="space-y-1">
-          <Label>Loan Type</Label>
-          <Select value={form.loanType} onChange={(e) => set("loanType", e.target.value)}>
-            <option value="DAILY">Daily</option>
-            <option value="WEEKLY">Weekly</option>
-            <option value="MONTHLY">Monthly</option>
+          <Label>Interest Method *</Label>
+          <Select
+            value={form.interestMethod}
+            onChange={(e) => set("interestMethod", e.target.value as InterestMethod)}
+          >
+            <option value="SIMPLE">Simple Interest</option>
+            <option value="COMPOUND">Compound Interest</option>
           </Select>
         </div>
         <div className="space-y-1">
-          <Label>Tenure (installments)</Label>
-          <Input
-            type="number"
-            min={1}
-            value={form.tenureCount}
-            onChange={(e) => set("tenureCount", e.target.value)}
-          />
+          <Label>Rate Period *</Label>
+          <Select
+            value={form.ratePeriod}
+            onChange={(e) => set("ratePeriod", e.target.value as RatePeriod)}
+          >
+            <option value="WEEKLY">Weekly</option>
+            <option value="MONTHLY">Monthly</option>
+            <option value="ANNUAL">Annually</option>
+          </Select>
         </div>
+
         <div className="space-y-1">
-          <Label>Principal</Label>
+          <Label>Principal Amount *</Label>
           <Input
             type="number"
             min={0}
@@ -242,7 +284,7 @@ export function LoanDetailsEditable({
           />
         </div>
         <div className="space-y-1">
-          <Label>Interest Rate (% annual)</Label>
+          <Label>Interest Rate % ({ratePeriodLabel}) *</Label>
           <Input
             type="number"
             min={0}
@@ -251,6 +293,28 @@ export function LoanDetailsEditable({
             onChange={(e) => set("interestRate", e.target.value)}
           />
         </div>
+
+        <div className="space-y-1">
+          <Label>Tenure Unit *</Label>
+          <Select
+            value={form.loanType}
+            onChange={(e) => set("loanType", e.target.value as LoanType)}
+          >
+            <option value="DAILY">Days</option>
+            <option value="WEEKLY">Weeks</option>
+            <option value="MONTHLY">Months</option>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label>Tenure ({tenureUnitLabel}) *</Label>
+          <Input
+            type="number"
+            min={1}
+            value={form.tenureCount}
+            onChange={(e) => set("tenureCount", e.target.value)}
+          />
+        </div>
+
         <div className="space-y-1">
           <Label>Processing Fee</Label>
           <Input
@@ -262,20 +326,72 @@ export function LoanDetailsEditable({
           />
         </div>
         <div className="space-y-1">
-          <Label>Start Date</Label>
+          <Label>Start Date *</Label>
           <Input
             type="date"
             value={form.startDate}
             onChange={(e) => set("startDate", e.target.value)}
           />
         </div>
+
         <div className="space-y-1 md:col-span-2">
           <Label>Purpose</Label>
-          <Input value={form.purpose} onChange={(e) => set("purpose", e.target.value)} />
+          <Input
+            value={form.purpose}
+            onChange={(e) => set("purpose", e.target.value)}
+            placeholder="e.g. Business expansion"
+          />
         </div>
         <div className="space-y-1 md:col-span-2">
           <Label>Notes</Label>
           <Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+        </div>
+
+        <div className="md:col-span-2 rounded-md border border-dashed p-3">
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary"
+              checked={override}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setOverride(next);
+                if (next && calc) {
+                  setOverrideInstallment(String(calc.installmentAmount));
+                  setOverrideTotalPayable(String(calc.totalPayable));
+                }
+              }}
+            />
+            Manually override EMI / Total Payable
+          </label>
+          {override && (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label>EMI / Installment</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={overrideInstallment}
+                  onChange={(e) => setOverrideInstallment(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Total Payable</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={overrideTotalPayable}
+                  onChange={(e) => setOverrideTotalPayable(e.target.value)}
+                />
+              </div>
+              <p className="sm:col-span-2 text-xs text-muted-foreground">
+                When enabled, these values are saved as-is instead of the calculated ones.
+                Interest amount will be derived as <em>Total Payable − Principal</em>.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="md:col-span-2 rounded-md border bg-muted/30 p-3 text-sm">
@@ -284,13 +400,23 @@ export function LoanDetailsEditable({
           </div>
           {calc ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Row label="Installment" value={formatMoney(calc.installmentAmount)} strong />
+              <Row
+                label="Method"
+                value={form.interestMethod === "COMPOUND" ? "Compound" : "Simple"}
+              />
+              {calc.effectiveAnnualRate != null && (
+                <Row label="Effective Annual Rate" value={`${calc.effectiveAnnualRate}%`} />
+              )}
+              <Row label="Principal" value={formatMoney(calc.principal)} />
               <Row label="Interest" value={formatMoney(calc.interestAmount)} />
               <Row label="Total Payable" value={formatMoney(calc.totalPayable)} strong />
+              <Row label="Installment" value={formatMoney(calc.installmentAmount)} strong />
               <Row label="Maturity" value={fmtDate(calc.maturityDate)} />
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground">Enter principal and tenure to see recalculated values.</p>
+            <p className="text-xs text-muted-foreground">
+              Enter principal and tenure to see recalculated values.
+            </p>
           )}
         </div>
       </CardContent>

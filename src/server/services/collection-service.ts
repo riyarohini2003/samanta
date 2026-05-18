@@ -71,11 +71,15 @@ export async function getDueList(params: {
       : {}),
   };
 
+  const periodFilter = dueDateFilter(date, mode, dateTo);
   const scheduleWhere: Prisma.RepaymentScheduleWhereInput = {
-    dueDate: dueDateFilter(date, mode, dateTo),
+    OR: [
+      { dueDate: periodFilter },
+      { paidAt: periodFilter },
+    ],
     ...(params.status && params.status !== "ALL"
       ? { status: params.status as any }
-      : { status: { in: ["PENDING", "PARTIAL", "MISSED"] } }),
+      : { status: { not: "SKIPPED" } }),
     loanAccount: loanWhere,
   };
 
@@ -147,17 +151,23 @@ export async function getDueSummary(params: {
   const statusFilter: Prisma.RepaymentScheduleWhereInput =
     params.status && params.status !== "ALL"
       ? { status: params.status as any }
-      : { status: { in: ["PENDING", "PARTIAL", "MISSED"] } };
+      : { status: { not: "SKIPPED" } };
+
+  const periodFilter = dueDateFilter(date, mode, dateTo);
+  const periodOr: Prisma.RepaymentScheduleWhereInput[] = [
+    { dueDate: periodFilter },
+    { paidAt: periodFilter },
+  ];
 
   const where: Prisma.RepaymentScheduleWhereInput = {
-    dueDate: dueDateFilter(date, mode, dateTo),
+    OR: periodOr,
     ...statusFilter,
     loanAccount: loanWhere,
   };
 
   // For "ALL" or no specific status, we need per-status counts from within the filtered set
   const baseWhere: Prisma.RepaymentScheduleWhereInput = {
-    dueDate: dueDateFilter(date, mode, dateTo),
+    OR: periodOr,
     loanAccount: loanWhere,
   };
 
@@ -176,7 +186,15 @@ export async function getDueSummary(params: {
       : {}),
   };
 
-  const [all, paid, partial, missed, pending, collectedOnDate] = await Promise.all([
+  // Schedule IDs for every installment in the listed period (any status), so we
+  // can scope "collected from listed data" to payments tied to these rows only.
+  const periodScheduleRows = await prisma.repaymentSchedule.findMany({
+    where: baseWhere,
+    select: { id: true },
+  });
+  const periodScheduleIds = periodScheduleRows.map((s) => s.id);
+
+  const [all, paid, partial, missed, pending, collectedOnDate, collectedOnListed, totalDueAgg] = await Promise.all([
     prisma.repaymentSchedule.aggregate({
       where,
       _sum: { dueAmount: true, paidAmount: true },
@@ -214,17 +232,41 @@ export async function getDueSummary(params: {
       _sum: { amount: true },
       _count: true,
     }),
+    // Collections within the period that were applied to schedule rows belonging
+    // to the listed period — used to deduct from pending without leaking
+    // payments made against installments outside the current view.
+    prisma.payment.aggregate({
+      where: {
+        ...paymentScopeWhere,
+        collectedAt: {
+          gte: dayjs.utc(date).startOf("day").toDate(),
+          lt: dayjs.utc(mode === "DUE_BETWEEN" && dateTo ? dateTo : date).add(1, "day").startOf("day").toDate(),
+        },
+        scheduleId: { in: periodScheduleIds },
+      },
+      _sum: { amount: true },
+    }),
+    // Total Due = gross sum of every installment's dueAmount in the period,
+    // regardless of payment status (PAID rows included). SKIPPED is excluded.
+    prisma.repaymentSchedule.aggregate({
+      where: { ...baseWhere, status: { not: "SKIPPED" } },
+      _sum: { dueAmount: true },
+      _count: true,
+    }),
   ]);
 
-  const totalDue = toNumber(all._sum.dueAmount);
+  const totalDue = toNumber(totalDueAgg._sum.dueAmount);
   const totalCollected = toNumber(collectedOnDate._sum.amount);
+  const totalCollectedOnListed = toNumber(collectedOnListed._sum.amount);
 
   return {
     totalCustomers: all._count,
     totalDue,
     totalCollected,
     totalCollectedCount: collectedOnDate._count,
-    pendingCollection: Math.max(totalDue - totalCollected, 0),
+    // Pending = total due for the listed period minus collections applied to
+    // those listed rows within the period.
+    pendingCollection: Math.max(totalDue - totalCollectedOnListed, 0),
     counts: {
       pending: pending._count,
       paid: paid._count,

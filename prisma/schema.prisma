@@ -264,6 +264,7 @@ model LoanAccount {
   loanType           LoanType
   principal          Float
   interestAmount     Float
+  processingFee      Float            @default(0)
   totalPayable       Float
   installmentAmount  Float
   paidAmount         Float            @default(0)

@@ -5,8 +5,8 @@ import { getCurrentUser } from "@/server/auth/session";
 import { isAdmin } from "@/server/auth/guards";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
-import LoanEditForm from "./loan-edit-form";
-import ScheduleEditor, { type InstallmentStatus } from "./schedule-editor";
+import EditLoanShell from "./edit-shell";
+import { type InstallmentStatus } from "./schedule-editor";
 
 export const dynamic = "force-dynamic";
 
@@ -51,13 +51,14 @@ export default async function EditLoanAccountPage({ params }: { params: { id: st
         }
       />
 
-      <LoanEditForm
+      <EditLoanShell
         loan={{
           id: loan.id,
           accountNo: loan.accountNo,
           loanType: loan.loanType,
           principal: Number(loan.principal),
           interestAmount: Number(loan.interestAmount),
+          processingFee: Number(loan.processingFee ?? 0),
           totalPayable: Number(loan.totalPayable),
           installmentAmount: Number(loan.installmentAmount),
           paidAmount: Number(loan.paidAmount),
@@ -76,11 +77,7 @@ export default async function EditLoanAccountPage({ params }: { params: { id: st
         }}
         branches={branches}
         employees={employees}
-      />
-
-      <ScheduleEditor
-        loanAccountId={loan.id}
-        initial={schedule.map((s) => ({
+        initialSchedule={schedule.map((s) => ({
           id: s.id,
           installmentNo: s.installmentNo,
           dueDate: s.dueDate.toISOString(),

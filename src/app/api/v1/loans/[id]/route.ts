@@ -36,6 +36,7 @@ const loanAccountUpdateSchema = z
     loanType: z.enum(["DAILY", "WEEKLY", "MONTHLY"]).optional(),
     principal: z.coerce.number().nonnegative().optional(),
     interestAmount: z.coerce.number().nonnegative().optional(),
+    processingFee: z.coerce.number().nonnegative().optional(),
     totalPayable: z.coerce.number().nonnegative().optional(),
     installmentAmount: z.coerce.number().nonnegative().optional(),
     paidAmount: z.coerce.number().nonnegative().optional(),
@@ -79,6 +80,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (body.loanType !== undefined) data.loanType = body.loanType;
     if (body.principal !== undefined) data.principal = body.principal;
     if (body.interestAmount !== undefined) data.interestAmount = body.interestAmount;
+    if (body.processingFee !== undefined) data.processingFee = body.processingFee;
     if (body.totalPayable !== undefined) data.totalPayable = body.totalPayable;
     if (body.installmentAmount !== undefined) data.installmentAmount = body.installmentAmount;
     if (body.paidAmount !== undefined) data.paidAmount = body.paidAmount;

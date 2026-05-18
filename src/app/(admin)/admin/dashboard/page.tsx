@@ -95,9 +95,8 @@ export default async function AdminDashboard() {
       _sum: { principal: true },
       _count: true,
     }),
-    // Total Processing Fees: sum across all disbursed applications
-    prisma.loanApplication.aggregate({
-      where: { status: "DISBURSED" },
+    // Total Processing Fees: sum across all disbursed loan accounts
+    prisma.loanAccount.aggregate({
       _sum: { processingFee: true },
       _count: true,
     }),

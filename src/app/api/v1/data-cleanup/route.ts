@@ -4,7 +4,7 @@ import { requireUser, AuthError } from "@/server/auth/session";
 import { ok, unauthorized, forbidden, badRequest, handleError } from "@/lib/api";
 import { writeAudit, getRequestMeta } from "@/server/audit";
 
-export const CATEGORIES = [
+const CATEGORIES = [
   "notifications",
   "audit-logs",
   "sessions",
@@ -16,7 +16,7 @@ export const CATEGORIES = [
   "all",
 ] as const;
 
-export type Category = (typeof CATEGORIES)[number];
+type Category = (typeof CATEGORIES)[number];
 
 type Mode = "preview" | "commit";
 

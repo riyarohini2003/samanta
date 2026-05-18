@@ -118,7 +118,7 @@ export default async function TransactionsPage({
         ...branchFilter,
       },
       select: {
-        application: { select: { processingFee: true } },
+        processingFee: true,
       },
     }),
     // Total collections in period
@@ -178,7 +178,7 @@ export default async function TransactionsPage({
         disbursedAt: true,
         disbursementMode: true,
         loanType: true,
-        application: { select: { processingFee: true } },
+        processingFee: true,
         customer: { select: { fullName: true, customerCode: true } },
         branch: { select: { code: true, name: true } },
         assignedEmployee: { select: { name: true, employeeCode: true } },
@@ -195,7 +195,7 @@ export default async function TransactionsPage({
   const paymentsCount = paymentsAgg._count;
 
   const totalProcessingFees = disbursedLoansForFees.reduce(
-    (acc, l) => acc + toNumber(l.application?.processingFee),
+    (acc, l) => acc + toNumber(l.processingFee),
     0
   );
 
@@ -415,7 +415,7 @@ export default async function TransactionsPage({
                       {formatMoney(toNumber(l.principal))}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {formatMoney(toNumber(l.application?.processingFee))}
+                      {formatMoney(toNumber(l.processingFee))}
                     </TableCell>
                   </TableRow>
                 ))

@@ -928,11 +928,11 @@ export async function taxReport(
 
   const scope = loanScopeWhere(user);
 
-  // Interest income from loans disbursed in period
-  const [disbursedLoans, collectionAgg, processingFeeAgg] = await Promise.all([
+  // Interest + processing-fee income from loans disbursed in period (both stored on the account)
+  const [disbursedLoans, collectionAgg] = await Promise.all([
     prisma.loanAccount.aggregate({
       where: { ...scope, disbursedAt: dateRange },
-      _sum: { principal: true, interestAmount: true, totalPayable: true },
+      _sum: { principal: true, interestAmount: true, totalPayable: true, processingFee: true },
       _count: true,
     }),
     prisma.payment.aggregate({
@@ -944,20 +944,12 @@ export async function taxReport(
       _sum: { amount: true, penalty: true },
       _count: true,
     }),
-    prisma.loanApplication.aggregate({
-      where: {
-        status: "DISBURSED",
-        reviewedAt: dateRange,
-        ...(scopeWhere(user).branchId ? { branchId: scopeWhere(user).branchId as string } : {}),
-      },
-      _sum: { processingFee: true },
-    }),
   ]);
 
   const interestIncome = toNumber(disbursedLoans._sum.interestAmount);
   const collectionAmount = toNumber(collectionAgg._sum.amount);
   const penaltyIncome = toNumber(collectionAgg._sum.penalty);
-  const processingFees = toNumber(processingFeeAgg._sum.processingFee);
+  const processingFees = toNumber(disbursedLoans._sum.processingFee);
   const totalIncome = interestIncome + penaltyIncome + processingFees;
 
   const rows: Record<string, string | number | null>[] = [

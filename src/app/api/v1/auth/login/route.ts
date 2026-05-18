@@ -21,13 +21,30 @@ export async function POST(req: NextRequest) {
     const body = loginSchema.parse(await req.json());
     const meta = getRequestMeta(req);
 
-    // Try exact or case-insensitive match first, then with +91 prefix for bare phone numbers
+    // Try exact match first, then with +91 prefix for bare 10-digit phone numbers.
+    // Plain `equals` (no `mode: "insensitive"`) avoids the MongoDB regex path —
+    // values like "+919771219353" contain a leading `+` that would otherwise be
+    // interpreted as a regex quantifier and crash the query.
     let user = await prisma.user.findFirst({
-      where: { loginId: { equals: body.loginId, mode: "insensitive" } },
+      where: { loginId: body.loginId },
     });
     if (!user && /^\d{10}$/.test(body.loginId)) {
       user = await prisma.user.findFirst({
-        where: { loginId: { equals: `+91${body.loginId}`, mode: "insensitive" } },
+        where: { loginId: `+91${body.loginId}` },
+      });
+    }
+    // Case-insensitive fallback only when the input is regex-safe (usernames like
+    // "rahul.k"). Phone-shaped inputs containing `+` are excluded here.
+    if (!user && /^[a-zA-Z0-9._\-]+$/.test(body.loginId)) {
+      user = await prisma.user.findFirst({
+        where: { loginId: { equals: body.loginId, mode: "insensitive" } },
+      });
+    }
+    // Also try matching by mobile number for users whose loginId is a username
+    // but who type their phone number on the login screen.
+    if (!user && /^\d{10}$/.test(body.loginId)) {
+      user = await prisma.user.findFirst({
+        where: { OR: [{ mobile: body.loginId }, { mobile: `+91${body.loginId}` }] },
       });
     }
 
