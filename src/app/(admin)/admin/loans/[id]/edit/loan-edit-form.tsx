@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,12 +23,22 @@ const toDateTimeInput = (iso: string | null) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+const weekdayOf = (value: string) => {
+  if (!value) return "";
+  const iso = value.length === 10 ? `${value}T00:00:00` : value;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? "" : WEEKDAYS[d.getDay()];
+};
+
 export interface LoanEditValues {
   id: string;
   accountNo: string;
   loanType: "DAILY" | "WEEKLY" | "MONTHLY";
   principal: number;
   interestAmount: number;
+  processingFee: number;
   totalPayable: number;
   installmentAmount: number;
   paidAmount: number;
@@ -50,10 +60,18 @@ export default function LoanEditForm({
   loan,
   branches,
   employees,
+  onStartDateChange,
+  onLoanTypeChange,
+  externalMaturityDate,
+  emiCount,
 }: {
   loan: LoanEditValues;
   branches: { id: string; code: string; name: string }[];
   employees: { id: string; name: string; employeeCode: string }[];
+  onStartDateChange?: (v: string) => void;
+  onLoanTypeChange?: (v: LoanEditValues["loanType"]) => void;
+  externalMaturityDate?: string;
+  emiCount?: number;
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -63,6 +81,7 @@ export default function LoanEditForm({
     loanType: loan.loanType,
     principal: String(loan.principal),
     interestAmount: String(loan.interestAmount),
+    processingFee: String(loan.processingFee),
     totalPayable: String(loan.totalPayable),
     installmentAmount: String(loan.installmentAmount),
     paidAmount: String(loan.paidAmount),
@@ -84,6 +103,11 @@ export default function LoanEditForm({
     setForm((f) => ({ ...f, [k]: v }));
   }
 
+  useEffect(() => {
+    if (externalMaturityDate === undefined) return;
+    setForm((f) => (f.maturityDate === externalMaturityDate ? f : { ...f, maturityDate: externalMaturityDate }));
+  }, [externalMaturityDate]);
+
   async function save() {
     setSaving(true);
     try {
@@ -92,6 +116,7 @@ export default function LoanEditForm({
         loanType: form.loanType,
         principal: Number(form.principal),
         interestAmount: Number(form.interestAmount),
+        processingFee: Number(form.processingFee),
         totalPayable: Number(form.totalPayable),
         installmentAmount: Number(form.installmentAmount),
         paidAmount: Number(form.paidAmount),
@@ -138,7 +163,14 @@ export default function LoanEditForm({
           </div>
           <div className="space-y-1">
             <Label>Loan Type</Label>
-            <Select value={form.loanType} onChange={(e) => set("loanType", e.target.value as LoanEditValues["loanType"])}>
+            <Select
+              value={form.loanType}
+              onChange={(e) => {
+                const v = e.target.value as LoanEditValues["loanType"];
+                set("loanType", v);
+                onLoanTypeChange?.(v);
+              }}
+            >
               <option value="DAILY">Daily</option>
               <option value="WEEKLY">Weekly</option>
               <option value="MONTHLY">Monthly</option>
@@ -170,12 +202,28 @@ export default function LoanEditForm({
         <CardHeader><CardTitle>Financials (raw override)</CardTitle></CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1">
+            <Label>No. of EMIs</Label>
+            <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm font-medium">
+              {emiCount ?? 0}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Derived from the schedule below — drives Maturity Date when Start Date changes.
+            </p>
+          </div>
+          <div className="space-y-1">
             <Label>Principal</Label>
             <Input type="number" step="0.01" value={form.principal} onChange={(e) => set("principal", e.target.value)} />
           </div>
           <div className="space-y-1">
             <Label>Interest Amount</Label>
             <Input type="number" step="0.01" value={form.interestAmount} onChange={(e) => set("interestAmount", e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label>Processing Fee</Label>
+            <Input type="number" step="0.01" value={form.processingFee} onChange={(e) => set("processingFee", e.target.value)} />
+            <p className="text-xs text-muted-foreground">
+              Recognised as income at disbursement; flows into Fund Balance & Income reports.
+            </p>
           </div>
           <div className="space-y-1">
             <Label>Total Payable</Label>
@@ -208,23 +256,58 @@ export default function LoanEditForm({
         <CardHeader><CardTitle>Dates</CardTitle></CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1">
-            <Label>Disbursed At</Label>
+            <div className="flex items-baseline justify-between gap-2">
+              <Label>Disbursed At</Label>
+              {weekdayOf(form.disbursedAt) && (
+                <span className="text-xs font-medium text-muted-foreground">{weekdayOf(form.disbursedAt)}</span>
+              )}
+            </div>
             <Input type="datetime-local" value={form.disbursedAt} onChange={(e) => set("disbursedAt", e.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label>Start Date</Label>
-            <Input type="date" value={form.startDate} onChange={(e) => set("startDate", e.target.value)} />
+            <div className="flex items-baseline justify-between gap-2">
+              <Label>Start Date</Label>
+              {weekdayOf(form.startDate) && (
+                <span className="text-xs font-medium text-muted-foreground">{weekdayOf(form.startDate)}</span>
+              )}
+            </div>
+            <Input
+              type="date"
+              value={form.startDate}
+              onChange={(e) => {
+                set("startDate", e.target.value);
+                onStartDateChange?.(e.target.value);
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Changing this re-syncs every EMI due date and the Maturity Date below.
+            </p>
           </div>
           <div className="space-y-1">
-            <Label>Maturity Date</Label>
+            <div className="flex items-baseline justify-between gap-2">
+              <Label>Maturity Date</Label>
+              {weekdayOf(form.maturityDate) && (
+                <span className="text-xs font-medium text-muted-foreground">{weekdayOf(form.maturityDate)}</span>
+              )}
+            </div>
             <Input type="date" value={form.maturityDate} onChange={(e) => set("maturityDate", e.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label>Next Due Date</Label>
+            <div className="flex items-baseline justify-between gap-2">
+              <Label>Next Due Date</Label>
+              {weekdayOf(form.nextDueDate) && (
+                <span className="text-xs font-medium text-muted-foreground">{weekdayOf(form.nextDueDate)}</span>
+              )}
+            </div>
             <Input type="date" value={form.nextDueDate} onChange={(e) => set("nextDueDate", e.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label>Closed At</Label>
+            <div className="flex items-baseline justify-between gap-2">
+              <Label>Closed At</Label>
+              {weekdayOf(form.closedAt) && (
+                <span className="text-xs font-medium text-muted-foreground">{weekdayOf(form.closedAt)}</span>
+              )}
+            </div>
             <Input type="datetime-local" value={form.closedAt} onChange={(e) => set("closedAt", e.target.value)} />
           </div>
         </CardContent>

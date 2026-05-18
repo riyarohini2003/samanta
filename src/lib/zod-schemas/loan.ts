@@ -91,6 +91,9 @@ export const loanApplicationUpdateSchema = z.object({
   notes: z.string().optional(),
   interestMethod: z.enum(["SIMPLE", "COMPOUND"]).optional(),
   ratePeriod: z.enum(["WEEKLY", "MONTHLY", "ANNUAL"]).optional(),
+  // Manual overrides — when provided, bypass calculator for these values
+  installmentAmount: z.coerce.number().nonnegative().optional(),
+  totalPayable: z.coerce.number().nonnegative().optional(),
 });
 
 export const loanApproveSchema = z.object({

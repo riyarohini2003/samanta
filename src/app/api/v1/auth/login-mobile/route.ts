@@ -26,12 +26,25 @@ export async function POST(req: NextRequest) {
     const body = loginSchema.parse(await req.json());
     const meta = getRequestMeta(req);
 
+    // Exact match first, then +91 prefix for bare 10-digit phones. Plain
+    // `equals` avoids the MongoDB regex path that crashes on values containing
+    // regex specials like the leading `+`.
     let user = await prisma.user.findFirst({
-      where: { loginId: { equals: body.loginId, mode: "insensitive" } },
+      where: { loginId: body.loginId },
     });
     if (!user && /^\d{10}$/.test(body.loginId)) {
       user = await prisma.user.findFirst({
-        where: { loginId: { equals: `+91${body.loginId}`, mode: "insensitive" } },
+        where: { loginId: `+91${body.loginId}` },
+      });
+    }
+    if (!user && /^[a-zA-Z0-9._\-]+$/.test(body.loginId)) {
+      user = await prisma.user.findFirst({
+        where: { loginId: { equals: body.loginId, mode: "insensitive" } },
+      });
+    }
+    if (!user && /^\d{10}$/.test(body.loginId)) {
+      user = await prisma.user.findFirst({
+        where: { OR: [{ mobile: body.loginId }, { mobile: `+91${body.loginId}` }] },
       });
     }
 

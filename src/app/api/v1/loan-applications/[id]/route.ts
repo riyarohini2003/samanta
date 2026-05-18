@@ -61,6 +61,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     };
     const calc = calculateLoan(merged);
 
+    // Manual overrides for EMI / Total Payable — fall back to calculated values.
+    const finalTotalPayable = body.totalPayable ?? calc.totalPayable;
+    const finalInstallmentAmount = body.installmentAmount ?? calc.installmentAmount;
+    // If Total Payable is overridden, derive interestAmount from it so values stay consistent.
+    const finalInterestAmount =
+      body.totalPayable != null
+        ? Math.round((body.totalPayable - calc.principal) * 100) / 100
+        : calc.interestAmount;
+
     const updated = await prisma.loanApplication.update({
       where: { id: params.id },
       data: {
@@ -69,9 +78,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         interestRate: merged.interestRate,
         processingFee: calc.processingFee,
         tenureCount: merged.tenureCount,
-        installmentAmount: calc.installmentAmount,
-        totalPayable: calc.totalPayable,
-        interestAmount: calc.interestAmount,
+        installmentAmount: finalInstallmentAmount,
+        totalPayable: finalTotalPayable,
+        interestAmount: finalInterestAmount,
         startDate: calc.startDate,
         maturityDate: calc.maturityDate,
         purpose: body.purpose ?? before.purpose,

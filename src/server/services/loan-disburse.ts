@@ -55,6 +55,7 @@ export async function disburseApplication(params: {
         loanType: app.loanType,
         principal: app.principal,
         interestAmount: app.interestAmount,
+        processingFee: app.processingFee,
         totalPayable: app.totalPayable,
         installmentAmount: app.installmentAmount,
         pendingAmount: app.totalPayable,

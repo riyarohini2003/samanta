@@ -25,6 +25,7 @@ import {
   Menu,
   X,
   Eraser,
+  Calculator,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSidebarState } from "@/components/layout/sidebar-context";
@@ -64,6 +65,7 @@ const adminNav: NavSection[] = [
       { href: "/admin/loans", label: "Loans", icon: Landmark, color: "text-amber-500" },
       { href: "/admin/collections", label: "Collections", icon: Wallet, color: "text-green-500" },
       { href: "/admin/transactions", label: "Transactions", icon: ArrowRightLeft, color: "text-fuchsia-500" },
+      { href: "/admin/calculator", label: "Loan Calculator", icon: Calculator, color: "text-yellow-500" },
     ],
   },
   {
@@ -100,6 +102,7 @@ const employeeNav: NavSection[] = [
       { href: "/employee/loan-applications", label: "Applications", icon: FileText, color: "text-sky-500" },
       { href: "/employee/loans", label: "Loans", icon: Landmark, color: "text-amber-500" },
       { href: "/employee/collections", label: "Collections", icon: Wallet, color: "text-green-500" },
+      { href: "/employee/calculator", label: "Loan Calculator", icon: Calculator, color: "text-yellow-500" },
     ],
   },
   {

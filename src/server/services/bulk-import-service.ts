@@ -36,13 +36,15 @@ export type Col = {
 };
 
 export const loanCols: Col[] = [
-  { key: "loanNo",           header: "Loan No",              aliases: ["sl no", "sr no", "serial no", "s.no", "s no", "sno", "loan number", "row no"], example: 1, note: "Serial number per row (required, integer, must be unique within the sheet). Used to identify rows in the report — database account number is generated automatically." },
+  { key: "loanNo",           header: "Loan No",              aliases: ["sl no", "sr no", "serial no", "s.no", "s no", "sno", "loan number", "row no"], example: 1, note: "Serial number per row (required, integer, must be unique within the sheet). Used to identify rows in the report only." },
+  { key: "accountNo",        header: "Account No",           aliases: ["account number", "acc no", "acc number", "loan account no", "loan account number", "a/c no"], example: "", note: "Optional. If filled, this exact value is saved as the loan's account number (must be unique across the sheet and the database). If left blank, an account number like LN-2026-00001 is generated automatically." },
   { key: "fullName",         header: "Name",                 aliases: ["full name", "customer name"],                 example: "Ramesh Kumar",              note: "Customer full name (required)" },
   { key: "fatherOrHusband",  header: "fatherOrHusband Name", aliases: ["father name", "father/husband name", "father or husband"], example: "Suresh Kumar",      note: "Father or husband name" },
   { key: "currentAddress",   header: "Address",              aliases: ["current address"],                            example: "H.No. 21, Sector 4, Bokaro", note: "Customer address (required)" },
   { key: "customerMobile",   header: "Phone No",             aliases: ["phone", "mobile", "phone number"],            example: "9876543210",                note: "10 digits, primary customer ID (required)" },
   { key: "principal",        header: "Principal",            aliases: ["loan amount", "principal amount"],            example: 20000,                       note: "Loan amount disbursed (required)" },
   { key: "totalPayable",     header: "Amount to",            aliases: ["amount to repay", "amount to pay", "total amount", "total payable"], example: 24800, note: "Total amount to be repaid (principal + interest, required)" },
+  { key: "processingFee",    header: "Processing Fee",       aliases: ["processing charge", "processing", "proc fee", "processing fees"], example: 0,                           note: "Processing fee/charge collected at disbursement. Leave blank to auto-fill 5% of principal (rounded)." },
   { key: "installmentAmount",header: "EMI",                  aliases: ["installment", "instalment", "emi amount"],    example: 248,                         note: "Per-instalment amount (required)" },
   { key: "loanType",         header: "Loan Type",            aliases: ["type", "frequency", "loan frequency"],        example: "DAILY",                     note: "DAILY / WEEKLY / MONTHLY (defaults to DAILY)" },
   { key: "tenureCount",      header: "No Of Days of emi",    aliases: ["no of days", "tenure", "days", "no of installments", "no. of days", "no. of days of emi", "tenureCount", "no of emi", "number of installments"], example: 100, note: "Number of instalments (days for DAILY, weeks for WEEKLY, months for MONTHLY)" },
@@ -192,12 +194,14 @@ const num = z.preprocess((v) => (typeof v === "string" ? v.replace(/[,₹\s]/g, 
 
 const loanRowSchema = z.object({
   loanNo: num.transform((n) => Math.round(n)).refine((n) => n > 0, "Loan No (serial) must be a positive integer"),
+  accountNo: optStr,
   fullName: reqStr,
   fatherOrHusband: optStr,
   currentAddress: reqStr,
   customerMobile: reqStr.transform((s) => s.replace(/\D/g, "")).refine((s) => /^\d{10}$/.test(s), "Phone No must be 10 digits"),
   principal: num.refine((n) => n > 0, "Principal must be positive"),
   totalPayable: num.refine((n) => n > 0, "Amount to must be positive"),
+  processingFee: z.preprocess((v) => (v === "" || v == null ? undefined : v), num.refine((n) => n >= 0, "Processing Fee cannot be negative")).optional(),
   installmentAmount: num.refine((n) => n > 0, "EMI must be positive"),
   loanType: z.preprocess(
     (v) => {
@@ -271,17 +275,31 @@ export async function generateTemplateBuffer(): Promise<Buffer> {
 
 function buildSampleRows() {
   return [
-    { loanNo: 1, fullName: "Ramesh Kumar", fatherOrHusband: "Suresh Kumar", currentAddress: "H.No. 21, Sector 4, Bokaro", customerMobile: "9000000001", principal: 20000, totalPayable: 24800, installmentAmount: 248,  loanType: "DAILY",   tenureCount: 100, startDate: "2026-01-01", paidSoFar: 24800, due: 0,     closingDate: "2026-04-10", status: "CLOSED" },
-    { loanNo: 2, fullName: "Sunita Devi",  fatherOrHusband: "",             currentAddress: "H.No. 5, Chas, Bokaro",       customerMobile: "9000000002", principal: 15000, totalPayable: 18600, installmentAmount: 930,  loanType: "WEEKLY",  tenureCount: 20,  startDate: "2025-12-01", paidSoFar: 9300,  due: 9300,  closingDate: "",            status: "ACTIVE" },
-    { loanNo: 3, fullName: "Mohan Singh",  fatherOrHusband: "Lakhan Singh", currentAddress: "Village Jaridih, Bokaro",     customerMobile: "9000000003", principal: 50000, totalPayable: 62000, installmentAmount: 5167, loanType: "MONTHLY", tenureCount: 12,  startDate: "2025-06-01", paidSoFar: 62000, due: 0,     closingDate: "2026-05-01", status: "CLOSED" },
-    { loanNo: 4, fullName: "Pooja Sharma", fatherOrHusband: "Geeta Sharma", currentAddress: "H.No. 88, Sector 9, Bokaro",  customerMobile: "9000000004", principal: 10000, totalPayable: 12400, installmentAmount: 124,  loanType: "DAILY",   tenureCount: 100, startDate: "2026-04-01", paidSoFar: 4900,  due: 7500,  closingDate: "",            status: "ACTIVE" },
-    { loanNo: 5, fullName: "Rajesh Yadav", fatherOrHusband: "Suresh Yadav", currentAddress: "H.No. 12, Sector 2, Bokaro",  customerMobile: "9000000005", principal: 25000, totalPayable: 31000, installmentAmount: 1240, loanType: "WEEKLY",  tenureCount: 25,  startDate: "2026-02-15", paidSoFar: 11000, due: 20000, closingDate: "",            status: "ACTIVE" },
+    { loanNo: 1, accountNo: "LN-2026-10001", fullName: "Ramesh Kumar", fatherOrHusband: "Suresh Kumar", currentAddress: "H.No. 21, Sector 4, Bokaro", customerMobile: "9000000001", principal: 20000, totalPayable: 24800, processingFee: 400,  installmentAmount: 248,  loanType: "DAILY",   tenureCount: 100, startDate: "2026-01-01", paidSoFar: 24800, due: 0,     closingDate: "2026-04-10", status: "CLOSED" },
+    { loanNo: 2, accountNo: "",              fullName: "Sunita Devi",  fatherOrHusband: "",             currentAddress: "H.No. 5, Chas, Bokaro",       customerMobile: "9000000002", principal: 15000, totalPayable: 18600, processingFee: 300,  installmentAmount: 930,  loanType: "WEEKLY",  tenureCount: 20,  startDate: "2025-12-01", paidSoFar: 9300,  due: 9300,  closingDate: "",            status: "ACTIVE" },
+    { loanNo: 3, accountNo: "SAM/2026/003",  fullName: "Mohan Singh",  fatherOrHusband: "Lakhan Singh", currentAddress: "Village Jaridih, Bokaro",     customerMobile: "9000000003", principal: 50000, totalPayable: 62000, processingFee: 1000, installmentAmount: 5167, loanType: "MONTHLY", tenureCount: 12,  startDate: "2025-06-01", paidSoFar: 62000, due: 0,     closingDate: "2026-05-01", status: "CLOSED" },
+    { loanNo: 4, accountNo: "",              fullName: "Pooja Sharma", fatherOrHusband: "Geeta Sharma", currentAddress: "H.No. 88, Sector 9, Bokaro",  customerMobile: "9000000004", principal: 10000, totalPayable: 12400, processingFee: 0,    installmentAmount: 124,  loanType: "DAILY",   tenureCount: 100, startDate: "2026-04-01", paidSoFar: 4900,  due: 7500,  closingDate: "",            status: "ACTIVE" },
+    { loanNo: 5, accountNo: "",              fullName: "Rajesh Yadav", fatherOrHusband: "Suresh Yadav", currentAddress: "H.No. 12, Sector 2, Bokaro",  customerMobile: "9000000005", principal: 25000, totalPayable: 31000, processingFee: 500,  installmentAmount: 1240, loanType: "WEEKLY",  tenureCount: 25,  startDate: "2026-02-15", paidSoFar: 11000, due: 20000, closingDate: "",            status: "ACTIVE" },
   ];
 }
 
 export async function generateSampleBuffer(): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   addLoanSheet(wb, buildSampleRows() as Record<string, unknown>[]);
+  addNotesSheet(wb);
+  const ab = await wb.xlsx.writeBuffer();
+  return Buffer.from(ab as ArrayBuffer);
+}
+
+/**
+ * Export existing loan accounts as a workbook that matches the bulk-import
+ * column layout — so the exported file can be tweaked and re-imported as-is.
+ */
+export async function generateExportBuffer(
+  rows: Record<string, unknown>[],
+): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  addLoanSheet(wb, rows);
   addNotesSheet(wb);
   const ab = await wb.xlsx.writeBuffer();
   return Buffer.from(ab as ArrayBuffer);
@@ -377,12 +395,29 @@ export async function runImportFromBuffer(buf: Buffer, opts: ImportOptions): Pro
 
   // Cross-row checks: duplicate Loan No (serial), EMI × tenure ≈ Amount to, etc.
   const seenSerial = new Map<number, number>(); // serial → first row it appeared in
+  const seenAccountNo = new Map<string, number>(); // accountNo → first row it appeared in
+  const existingAccountNos = new Set(
+    (await prisma.loanAccount.findMany({ select: { accountNo: true } })).map((l) => l.accountNo),
+  );
   for (const { row, data } of loans) {
     if (seenSerial.has(data.loanNo)) {
       log("loans", row, `Loan #${data.loanNo}`, "ERROR",
         `Loan No ${data.loanNo} is duplicated (also on row ${seenSerial.get(data.loanNo)}).`);
     } else {
       seenSerial.set(data.loanNo, row);
+    }
+    if (data.accountNo) {
+      const acc = data.accountNo;
+      if (seenAccountNo.has(acc)) {
+        log("loans", row, `Loan #${data.loanNo}`, "ERROR",
+          `Account No "${acc}" is duplicated (also on row ${seenAccountNo.get(acc)}).`);
+      } else {
+        seenAccountNo.set(acc, row);
+      }
+      if (existingAccountNos.has(acc)) {
+        log("loans", row, `Loan #${data.loanNo}`, "ERROR",
+          `Account No "${acc}" already exists in the database. Choose a different value or leave the cell blank to auto-generate.`);
+      }
     }
     const expected = Math.round(data.installmentAmount * data.tenureCount);
     if (Math.abs(expected - Math.round(data.totalPayable)) > data.installmentAmount) {
@@ -479,7 +514,8 @@ export async function runImportFromBuffer(buf: Buffer, opts: ImportOptions): Pro
       const interestRate = deriveAnnualRate(calc.principal, calc.totalPayable, calc.tenureCount, loanType);
 
       const applicationNo = await nextApplicationNo();
-      const accountNo = await nextLoanAccountNo();
+      const accountNo = data.accountNo ? data.accountNo : await nextLoanAccountNo();
+      const processingFee = data.processingFee ?? Math.round(calc.principal * 0.05);
 
       // Build schedule with paid state baked in — avoids per-installment update loop.
       const { rows: scheduleRows, lastFullyPaidDueDate } = buildScheduleRows({
@@ -507,6 +543,7 @@ export async function runImportFromBuffer(buf: Buffer, opts: ImportOptions): Pro
             loanType,
             principal: calc.principal,
             interestRate,
+            processingFee,
             tenureCount: calc.tenureCount,
             installmentAmount: calc.installmentAmount,
             totalPayable: calc.totalPayable,
@@ -528,6 +565,7 @@ export async function runImportFromBuffer(buf: Buffer, opts: ImportOptions): Pro
             loanType,
             principal: calc.principal,
             interestAmount: calc.interestAmount,
+            processingFee,
             totalPayable: calc.totalPayable,
             installmentAmount: calc.installmentAmount,
             paidAmount,

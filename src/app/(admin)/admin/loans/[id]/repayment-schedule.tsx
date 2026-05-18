@@ -11,8 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Loader2 } from "lucide-react";
-import { fmtDate, fmtDateTime } from "@/lib/dayjs";
+import dayjs, { fmtDate, fmtDateTime } from "@/lib/dayjs";
 import { formatMoney } from "@/lib/formatters";
+import { randomId } from "@/lib/utils";
 
 interface ScheduleRow {
   id: string;
@@ -61,7 +62,10 @@ export default function RepaymentSchedule({ loanAccountId, loanStatus, schedule 
             return (
               <TableRow key={s.id}>
                 <TableCell>{s.installmentNo}</TableCell>
-                <TableCell>{fmtDate(s.dueDate)}</TableCell>
+                <TableCell>
+                  <div>{fmtDate(s.dueDate)}</div>
+                  <div className="text-[11px] text-muted-foreground">{dayjs(s.dueDate).format("dddd")}</div>
+                </TableCell>
                 <TableCell>{formatMoney(s.dueAmount)}</TableCell>
                 <TableCell>{formatMoney(s.paidAmount)}</TableCell>
                 <TableCell><StatusBadge status={s.status} /></TableCell>
@@ -126,7 +130,7 @@ function CollectDialog({
   async function submit() {
     setLoading(true);
     try {
-      const clientRef = crypto.randomUUID();
+      const clientRef = randomId();
       const res = await fetch("/api/v1/collections/pay", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

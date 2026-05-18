@@ -13,6 +13,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "cron:overdue": "tsx scripts/cron-overdue.ts",
+    "backfill:processing-fee": "tsx scripts/backfill-loan-processing-fee.ts",
     "postinstall": "prisma generate",
     "test": "vitest run",
     "test:watch": "vitest"

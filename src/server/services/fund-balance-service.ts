@@ -57,11 +57,11 @@ export async function getFundBreakdown(range: FundRange = {}): Promise<FundBreak
       _sum: { amount: true },
       _count: true,
     }),
-    // Processing fees are recognised at disbursement, so we filter loan accounts
-    // by disbursedAt and pull processingFee from the linked application in one go.
+    // Processing fees are recognised at disbursement and stored on the account
+    // (copied from the application at disbursal; admin-editable on the loan edit page).
     prisma.loanAccount.findMany({
       where: dateFilter ? { disbursedAt: dateFilter } : {},
-      select: { principal: true, application: { select: { processingFee: true } } },
+      select: { principal: true, processingFee: true },
     }),
     prisma.investmentPayout.aggregate({
       where: {
@@ -75,7 +75,7 @@ export async function getFundBreakdown(range: FundRange = {}): Promise<FundBreak
 
   const principalDisbursedOut = loanRows.reduce((s, r) => s + toNumber(r.principal), 0);
   const processingFeesIn = loanRows.reduce(
-    (s, r) => s + toNumber(r.application?.processingFee),
+    (s, r) => s + toNumber(r.processingFee),
     0,
   );
 
@@ -144,8 +144,8 @@ export async function getFundLedger(range: FundRange = {}): Promise<LedgerEntry[
         disbursedAt: true,
         accountNo: true,
         principal: true,
+        processingFee: true,
         customer: { select: { fullName: true } },
-        application: { select: { processingFee: true } },
       },
       orderBy: { disbursedAt: "asc" },
     }),
@@ -202,7 +202,7 @@ export async function getFundLedger(range: FundRange = {}): Promise<LedgerEntry[
       inflow: 0,
       outflow: toNumber(d.principal),
     });
-    const fee = toNumber(d.application?.processingFee);
+    const fee = toNumber(d.processingFee);
     if (fee > 0) {
       entries.push({
         date: d.disbursedAt,
