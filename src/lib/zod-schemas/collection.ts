@@ -23,5 +23,14 @@ export const paymentCreateSchema = z.object({
   clientRef: z.string().optional(),
 });
 
+export const paymentUpdateSchema = z.object({
+  amount: z.coerce.number().positive(),
+  penalty: z.coerce.number().nonnegative().default(0),
+  mode: z.enum(["CASH", "UPI", "BANK", "CHEQUE"]),
+  note: z.string().optional().nullable(),
+  collectedAt: z.string().datetime().optional(),
+});
+
 export type DueListQuery = z.infer<typeof dueListQuerySchema>;
 export type PaymentCreateInput = z.infer<typeof paymentCreateSchema>;
+export type PaymentUpdateInput = z.infer<typeof paymentUpdateSchema>;

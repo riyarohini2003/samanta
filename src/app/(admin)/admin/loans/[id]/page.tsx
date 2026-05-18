@@ -9,11 +9,11 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/badge";
 import { IglBadge } from "@/components/ui/igl-badge";
 import { getLoanSerial } from "@/server/services/igl-serial";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pencil } from "lucide-react";
-import { fmtDate, fmtDateTime } from "@/lib/dayjs";
+import { fmtDate } from "@/lib/dayjs";
 import { formatMoney } from "@/lib/formatters";
 import RepaymentSchedule from "./repayment-schedule";
+import PaymentHistory from "./payment-history";
 import { LoanCloseButton } from "@/components/ui/loan-close-dialog";
 
 export const dynamic = "force-dynamic";
@@ -97,33 +97,19 @@ export default async function LoanDetailPage({ params }: { params: { id: string 
       <Card>
         <CardHeader><CardTitle>Payment History</CardTitle></CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Receipt</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Mode</TableHead>
-                <TableHead>Collected By</TableHead>
-                <TableHead>Note</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loan.payments.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-mono text-xs">{p.receiptNo}</TableCell>
-                  <TableCell>{fmtDateTime(p.collectedAt)}</TableCell>
-                  <TableCell>{formatMoney(p.amount)}</TableCell>
-                  <TableCell>{p.mode}</TableCell>
-                  <TableCell>{p.collectedBy.name}</TableCell>
-                  <TableCell>{p.note ?? "—"}</TableCell>
-                </TableRow>
-              ))}
-              {loan.payments.length === 0 && (
-                <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">No payments yet.</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
+          <PaymentHistory
+            canEdit={canEdit}
+            payments={loan.payments.map((p) => ({
+              id: p.id,
+              receiptNo: p.receiptNo,
+              collectedAt: p.collectedAt.toISOString(),
+              amount: Number(p.amount),
+              penalty: Number(p.penalty),
+              mode: p.mode,
+              collectedByName: p.collectedBy.name,
+              note: p.note,
+            }))}
+          />
         </CardContent>
       </Card>
     </div>
