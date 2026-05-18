@@ -18,11 +18,17 @@ import {
   ShieldCheck,
   Settings,
   DatabaseBackup,
+  ArrowRightLeft,
+  PiggyBank,
+  Upload,
   LogOut,
   Menu,
   X,
+  Eraser,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useSidebarState } from "@/components/layout/sidebar-context";
+import type { Role } from "@prisma/client";
 
 type NavItem = {
   href: string;
@@ -30,6 +36,8 @@ type NavItem = {
   icon: React.ComponentType<{ className?: string }>;
   /** Accent color class applied to the icon when active */
   color?: string;
+  /** If set, item is only rendered when the current user's role is in this list. */
+  visibleTo?: Role[];
 };
 type NavSection = { label: string; items: NavItem[] };
 
@@ -55,6 +63,13 @@ const adminNav: NavSection[] = [
       { href: "/admin/loan-applications", label: "Applications", icon: FileText, color: "text-sky-500" },
       { href: "/admin/loans", label: "Loans", icon: Landmark, color: "text-amber-500" },
       { href: "/admin/collections", label: "Collections", icon: Wallet, color: "text-green-500" },
+      { href: "/admin/transactions", label: "Transactions", icon: ArrowRightLeft, color: "text-fuchsia-500" },
+    ],
+  },
+  {
+    label: "Funding",
+    items: [
+      { href: "/admin/investors", label: "Investors", icon: PiggyBank, color: "text-rose-500" },
     ],
   },
   {
@@ -63,6 +78,8 @@ const adminNav: NavSection[] = [
       { href: "/admin/reports", label: "Reports", icon: BarChart3, color: "text-pink-500" },
       { href: "/admin/audit-logs", label: "Audit Logs", icon: ShieldCheck, color: "text-orange-500" },
       { href: "/admin/backup", label: "Backup", icon: DatabaseBackup, color: "text-teal-500" },
+      { href: "/admin/bulk-import", label: "Bulk Import", icon: Upload, color: "text-lime-500" },
+      { href: "/admin/data-cleanup", label: "Data Cleanup", icon: Eraser, color: "text-red-500", visibleTo: ["SUPER_ADMIN"] },
       { href: "/admin/settings", label: "Settings", icon: Settings, color: "text-slate-500" },
     ],
   },
@@ -101,37 +118,60 @@ async function logout() {
 
 function SidebarBody({
   variant,
+  role,
   onNavigate,
+  compact = false,
 }: {
   variant: "admin" | "employee";
+  role?: Role;
   onNavigate?: () => void;
+  compact?: boolean;
 }) {
   const pathname = usePathname();
-  const sections = variant === "admin" ? adminNav : employeeNav;
+  const rawSections = variant === "admin" ? adminNav : employeeNav;
+  const sections = React.useMemo(
+    () =>
+      rawSections
+        .map((s) => ({
+          ...s,
+          items: s.items.filter((i) => !i.visibleTo || (role && i.visibleTo.includes(role))),
+        }))
+        .filter((s) => s.items.length > 0),
+    [rawSections, role]
+  );
 
   return (
     <>
       {/* Brand */}
-      <div className="flex h-16 items-center gap-3 border-b border-sidebar-border/60 px-5">
-        <div className="relative">
+      <div
+        className={cn(
+          "flex h-16 items-center gap-3 border-b border-sidebar-border/60",
+          compact ? "justify-center px-2" : "px-5"
+        )}
+      >
+        <div className="relative shrink-0">
           <div className="absolute -inset-0.5 rounded-lg bg-gradient-to-br from-primary/20 to-sky-400/20 opacity-0 blur-sm transition-opacity group-hover:opacity-100" />
           <Image src="/logo.png" alt="Samanta Finance" width={34} height={34} className="relative rounded-lg" />
         </div>
-        <div className="min-w-0">
-          <div className="truncate text-sm font-bold leading-tight tracking-tight">Samanta LMS</div>
-          <div className="truncate text-[10px] font-medium uppercase tracking-widest text-muted-foreground/70">
-            {variant} Panel
+        {!compact && (
+          <div className="min-w-0">
+            <div className="truncate text-sm font-bold leading-tight tracking-tight">Samanta LMS</div>
+            <div className="truncate text-[10px] font-medium uppercase tracking-widest text-muted-foreground/70">
+              {variant} Panel
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 space-y-3 overflow-hidden px-3 py-3">
+      <nav className={cn("flex-1 space-y-3 overflow-y-auto overflow-x-hidden py-3", compact ? "px-2" : "px-3")}>
         {sections.map((section) => (
           <div key={section.label}>
-            <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
-              {section.label}
-            </div>
+            {!compact && (
+              <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+                {section.label}
+              </div>
+            )}
             <ul className="space-y-0.5">
               {section.items.map((item) => {
                 const Icon = item.icon;
@@ -145,8 +185,11 @@ function SidebarBody({
                     <Link
                       href={item.href}
                       onClick={onNavigate}
+                      title={compact ? item.label : undefined}
+                      aria-label={compact ? item.label : undefined}
                       className={cn(
-                        "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-200",
+                        "group relative flex items-center rounded-lg text-[13px] font-medium transition-all duration-200",
+                        compact ? "h-10 w-full justify-center px-0" : "gap-3 px-3 py-2",
                         active
                           ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
                           : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
@@ -168,7 +211,7 @@ function SidebarBody({
                             : "text-muted-foreground/70 group-hover:text-foreground"
                         )}
                       />
-                      <span className="truncate">{item.label}</span>
+                      {!compact && <span className="truncate">{item.label}</span>}
                     </Link>
                   </li>
                 );
@@ -179,29 +222,41 @@ function SidebarBody({
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-sidebar-border/60 p-3">
+      <div className={cn("border-t border-sidebar-border/60", compact ? "p-2" : "p-3")}>
         <Button
           variant="ghost"
-          className="w-full justify-start gap-3 text-[13px] text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+          size={compact ? "icon" : "default"}
+          aria-label="Logout"
+          title={compact ? "Logout" : undefined}
+          className={cn(
+            "text-[13px] text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors",
+            compact ? "mx-auto flex h-10 w-10" : "w-full justify-start gap-3"
+          )}
           onClick={logout}
         >
           <LogOut className="h-4 w-4" />
-          Logout
+          {!compact && "Logout"}
         </Button>
       </div>
     </>
   );
 }
 
-export function Sidebar({ variant }: { variant: "admin" | "employee" }) {
+export function Sidebar({ variant, role }: { variant: "admin" | "employee"; role?: Role }) {
+  const { collapsed } = useSidebarState();
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-sidebar-border/60 bg-sidebar text-sidebar-foreground md:flex">
-      <SidebarBody variant={variant} />
+    <aside
+      className={cn(
+        "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-sidebar-border/60 bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-out md:flex",
+        collapsed ? "w-16" : "w-64"
+      )}
+    >
+      <SidebarBody variant={variant} role={role} compact={collapsed} />
     </aside>
   );
 }
 
-export function MobileSidebarTrigger({ variant }: { variant: "admin" | "employee" }) {
+export function MobileSidebarTrigger({ variant, role }: { variant: "admin" | "employee"; role?: Role }) {
   const [open, setOpen] = React.useState(false);
   const pathname = usePathname();
 
@@ -237,7 +292,7 @@ export function MobileSidebarTrigger({ variant }: { variant: "admin" | "employee
           >
             <X className="h-4 w-4" />
           </DialogPrimitive.Close>
-          <SidebarBody variant={variant} onNavigate={() => setOpen(false)} />
+          <SidebarBody variant={variant} role={role} onNavigate={() => setOpen(false)} />
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

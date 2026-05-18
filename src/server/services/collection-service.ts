@@ -6,10 +6,23 @@ import { nextReceiptNo } from "@/server/counters";
 import { toNumber } from "@/lib/formatters";
 import type { CurrentUser } from "@/server/auth/session";
 import { loanScopeWhere } from "@/server/auth/guards";
+import { getLoanSerialMap } from "@/server/services/igl-serial";
 
-/** Build a dueDate filter: range for DUE_ON (handles timezone-offset dates), lte for DUE_UPTO */
-function dueDateFilter(date: Date, mode: "DUE_ON" | "DUE_UPTO"): Prisma.DateTimeFilter {
+/** Build a dueDate filter: range for DUE_ON, lte for DUE_UPTO, [from, to] for DUE_BETWEEN */
+function dueDateFilter(
+  date: Date,
+  mode: "DUE_ON" | "DUE_UPTO" | "DUE_BETWEEN",
+  dateTo?: Date
+): Prisma.DateTimeFilter {
   if (mode === "DUE_UPTO") return { lte: dayjs.utc(date).endOf("day").toDate() };
+  if (mode === "DUE_BETWEEN") {
+    // If dateTo missing, fall back to single-day behavior
+    const end = dateTo ?? date;
+    return {
+      gte: dayjs.utc(date).startOf("day").toDate(),
+      lt: dayjs.utc(end).add(1, "day").startOf("day").toDate(),
+    };
+  }
   // DUE_ON: match any time within the calendar day (UTC)
   return {
     gte: dayjs.utc(date).startOf("day").toDate(),
@@ -28,14 +41,16 @@ function dueDateFilter(date: Date, mode: "DUE_ON" | "DUE_UPTO"): Prisma.DateTime
 export async function getDueList(params: {
   user: CurrentUser;
   date: string; // YYYY-MM-DD
+  dateTo?: string; // YYYY-MM-DD (used when mode=DUE_BETWEEN)
   branchId?: string;
   employeeId?: string;
   loanType?: "DAILY" | "WEEKLY" | "MONTHLY";
   status?: "ALL" | "PENDING" | "PAID" | "PARTIAL" | "MISSED";
   q?: string;
-  mode?: "DUE_ON" | "DUE_UPTO";
+  mode?: "DUE_ON" | "DUE_UPTO" | "DUE_BETWEEN";
 }) {
   const date = toDateOnly(params.date);
+  const dateTo = params.dateTo ? toDateOnly(params.dateTo) : undefined;
   const mode = params.mode ?? "DUE_ON";
 
   const loanWhere: Prisma.LoanAccountWhereInput = {
@@ -57,7 +72,7 @@ export async function getDueList(params: {
   };
 
   const scheduleWhere: Prisma.RepaymentScheduleWhereInput = {
-    dueDate: dueDateFilter(date, mode),
+    dueDate: dueDateFilter(date, mode, dateTo),
     ...(params.status && params.status !== "ALL"
       ? { status: params.status as any }
       : { status: { in: ["PENDING", "PARTIAL", "MISSED"] } }),
@@ -70,7 +85,12 @@ export async function getDueList(params: {
       loanAccount: {
         include: {
           customer: {
-            select: { id: true, customerCode: true, fullName: true, mobile: true },
+            select: {
+              id: true,
+              customerCode: true,
+              fullName: true,
+              mobile: true,
+            },
           },
           branch: { select: { id: true, code: true, name: true } },
           assignedEmployee: { select: { id: true, name: true, employeeCode: true } },
@@ -85,21 +105,24 @@ export async function getDueList(params: {
     take: 500,
   });
 
-  return rows;
+  const serials = await getLoanSerialMap(rows.map((r) => r.loanAccountId));
+  return rows.map((r) => ({ ...r, iglSerial: serials.get(r.loanAccountId) ?? 0 }));
 }
 
 /** Summary aggregate for dashboard cards. */
 export async function getDueSummary(params: {
   user: CurrentUser;
   date: string;
+  dateTo?: string;
   branchId?: string;
   employeeId?: string;
   loanType?: "DAILY" | "WEEKLY" | "MONTHLY";
   status?: "ALL" | "PENDING" | "PAID" | "PARTIAL" | "MISSED";
   q?: string;
-  mode?: "DUE_ON" | "DUE_UPTO";
+  mode?: "DUE_ON" | "DUE_UPTO" | "DUE_BETWEEN";
 }) {
   const date = toDateOnly(params.date);
+  const dateTo = params.dateTo ? toDateOnly(params.dateTo) : undefined;
   const mode = params.mode ?? "DUE_ON";
 
   const loanWhere: Prisma.LoanAccountWhereInput = {
@@ -127,14 +150,14 @@ export async function getDueSummary(params: {
       : { status: { in: ["PENDING", "PARTIAL", "MISSED"] } };
 
   const where: Prisma.RepaymentScheduleWhereInput = {
-    dueDate: dueDateFilter(date, mode),
+    dueDate: dueDateFilter(date, mode, dateTo),
     ...statusFilter,
     loanAccount: loanWhere,
   };
 
   // For "ALL" or no specific status, we need per-status counts from within the filtered set
   const baseWhere: Prisma.RepaymentScheduleWhereInput = {
-    dueDate: dueDateFilter(date, mode),
+    dueDate: dueDateFilter(date, mode, dateTo),
     loanAccount: loanWhere,
   };
 
@@ -179,13 +202,13 @@ export async function getDueSummary(params: {
       _sum: { dueAmount: true, paidAmount: true },
       _count: true,
     }),
-    // Actual collections made on the selected date (by collectedAt, not dueDate)
+    // Actual collections made within the selected period (by collectedAt, not dueDate)
     prisma.payment.aggregate({
       where: {
         ...paymentScopeWhere,
         collectedAt: {
           gte: dayjs.utc(date).startOf("day").toDate(),
-          lt: dayjs.utc(date).add(1, "day").startOf("day").toDate(),
+          lt: dayjs.utc(mode === "DUE_BETWEEN" && dateTo ? dateTo : date).add(1, "day").startOf("day").toDate(),
         },
       },
       _sum: { amount: true },

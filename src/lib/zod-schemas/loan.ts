@@ -26,6 +26,11 @@ export const loanApplicationCreateSchema = z.object({
   ratePeriod: z.enum(["WEEKLY", "MONTHLY", "ANNUAL"]).default("ANNUAL"),
   documents: z.array(uploadedDocSchema).optional(),
   asDraft: z.boolean().optional(),
+  /** Self-calculate mode: bypass server calculation, use provided values */
+  selfCalculate: z.boolean().optional(),
+  interestAmount: z.coerce.number().nonnegative().optional(),
+  totalPayable: z.coerce.number().nonnegative().optional(),
+  installmentAmount: z.coerce.number().nonnegative().optional(),
 });
 
 /** Combined intake: create a new customer AND their first loan application in one call. */
@@ -99,6 +104,7 @@ export const loanRejectSchema = z.object({
 export const loanDisburseSchema = z.object({
   disbursementMode: z.enum(["CASH", "BANK", "UPI", "CHEQUE"]),
   disbursedAt: z.string().optional(),
+  firstDueDate: z.string().optional(),
   assignedEmployeeId: z.string().min(1),
 });
 

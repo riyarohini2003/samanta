@@ -59,7 +59,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       },
     });
 
-    // Determine eligibility per loan type
+    // Determine eligibility per loan type.
+    // Multiple loans of the same mode (e.g. several WEEKLY loans) are allowed —
+    // surface existing active loans / pending apps as informational context, not a block.
     const loanTypes = ["DAILY", "WEEKLY", "MONTHLY"] as const;
     const eligibility = loanTypes.map((type) => {
       const activeLoans = loans.filter(
@@ -71,18 +73,25 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
           ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED"].includes(a.status)
       );
 
-      const hasActiveLoan = activeLoans.length > 0;
-      const hasPendingApp = pendingApps.length > 0;
-      const eligible = !hasActiveLoan && !hasPendingApp;
-
-      let reason = "";
-      if (hasActiveLoan) {
-        reason = `Active ${type.toLowerCase()} loan exists (${activeLoans[0].accountNo})`;
-      } else if (hasPendingApp) {
-        reason = `Pending ${type.toLowerCase()} application (${pendingApps[0].applicationNo})`;
+      const notes: string[] = [];
+      if (activeLoans.length > 0) {
+        notes.push(
+          `${activeLoans.length} active ${type.toLowerCase()} loan${activeLoans.length > 1 ? "s" : ""} (latest: ${activeLoans[0].accountNo})`
+        );
+      }
+      if (pendingApps.length > 0) {
+        notes.push(
+          `${pendingApps.length} pending ${type.toLowerCase()} application${pendingApps.length > 1 ? "s" : ""} (latest: ${pendingApps[0].applicationNo})`
+        );
       }
 
-      return { type, eligible, reason, activeLoans, pendingApps };
+      return {
+        type,
+        eligible: true,
+        reason: notes.join(" · "),
+        activeLoans,
+        pendingApps,
+      };
     });
 
     // Overall flags

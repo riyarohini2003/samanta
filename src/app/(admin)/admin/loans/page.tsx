@@ -2,10 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/server/db";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { StatusBadge } from "@/components/ui/badge";
-import { fmtDate } from "@/lib/dayjs";
-import { formatMoney } from "@/lib/formatters";
+import { getLoanSerialMap } from "@/server/services/igl-serial";
+import LoansTable, { type LoanRow } from "./loans-table";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +21,23 @@ export default async function AdminLoansPage({ searchParams }: { searchParams: {
       assignedEmployee: { select: { name: true } },
     },
   });
+
+  const serials = await getLoanSerialMap(loans.map((l) => l.id));
+
+  const rows: LoanRow[] = loans.map((l) => ({
+    id: l.id,
+    accountNo: l.accountNo,
+    loanType: l.loanType,
+    principal: Number(l.principal),
+    paidAmount: Number(l.paidAmount),
+    pendingAmount: Number(l.pendingAmount),
+    nextDueDate: l.nextDueDate,
+    status: l.status,
+    customer: l.customer,
+    branch: l.branch,
+    assignedEmployee: l.assignedEmployee,
+    iglSerial: serials.get(l.id),
+  }));
 
   const tabs = [
     { label: "All", q: "" },
@@ -46,43 +61,7 @@ export default async function AdminLoansPage({ searchParams }: { searchParams: {
       </div>
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Account No</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Principal</TableHead>
-                <TableHead>Paid</TableHead>
-                <TableHead>Pending</TableHead>
-                <TableHead>Next Due</TableHead>
-                <TableHead>Branch</TableHead>
-                <TableHead>Officer</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loans.map((l) => (
-                <TableRow key={l.id}>
-                  <TableCell className="font-mono text-xs">
-                    <Link href={`/admin/loans/${l.id}`} className="hover:underline">{l.accountNo}</Link>
-                  </TableCell>
-                  <TableCell className="font-medium">{l.customer.fullName}<div className="text-xs text-muted-foreground">{l.customer.mobile}</div></TableCell>
-                  <TableCell>{l.loanType}</TableCell>
-                  <TableCell>{formatMoney(l.principal)}</TableCell>
-                  <TableCell>{formatMoney(l.paidAmount)}</TableCell>
-                  <TableCell>{formatMoney(l.pendingAmount)}</TableCell>
-                  <TableCell>{fmtDate(l.nextDueDate)}</TableCell>
-                  <TableCell>{l.branch.name}</TableCell>
-                  <TableCell>{l.assignedEmployee.name}</TableCell>
-                  <TableCell><StatusBadge status={l.status} /></TableCell>
-                </TableRow>
-              ))}
-              {loans.length === 0 && (
-                <TableRow><TableCell colSpan={10} className="py-12 text-center text-muted-foreground">No loans yet.</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
+          <LoansTable loans={rows} />
         </CardContent>
       </Card>
     </div>

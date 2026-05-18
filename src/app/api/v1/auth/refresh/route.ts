@@ -1,20 +1,33 @@
 import { cookies } from "next/headers";
+import { NextRequest } from "next/server";
 import { COOKIE_NAMES } from "@/lib/constants";
-import { verifyRefreshToken, signAccessToken, TOKEN_TTL } from "@/server/auth/jwt";
+import {
+  verifyRefreshToken,
+  signAccessToken,
+  signRefreshToken,
+  TOKEN_TTL,
+} from "@/server/auth/jwt";
 import { prisma } from "@/server/db";
 import { ok, unauthorized, handleError } from "@/lib/api";
-import { setAuthCookies } from "@/server/auth/session";
 
-export async function POST() {
+/**
+ * Accepts the refresh token either from the httpOnly `samanta_rt` cookie
+ * (web) or from an `X-Refresh-Token` header (mobile / Bearer flow).
+ *
+ * Mobile clients receive both fresh tokens in the JSON body. Web clients
+ * get the new access token as a Set-Cookie, identical to the prior behavior.
+ */
+export async function POST(req: NextRequest) {
   try {
     const cookieStore = cookies();
-    const refreshToken = cookieStore.get(COOKIE_NAMES.refresh)?.value;
+    const headerRefresh = req.headers.get("x-refresh-token");
+    const cookieRefresh = cookieStore.get(COOKIE_NAMES.refresh)?.value;
+    const refreshToken = headerRefresh || cookieRefresh;
     if (!refreshToken) return unauthorized("No refresh token");
 
     const payload = await verifyRefreshToken(refreshToken);
     if (!payload) return unauthorized("Invalid or expired refresh token");
 
-    // Verify the session still exists and hasn't been revoked
     const session = await prisma.session.findFirst({
       where: { refreshToken, userId: payload.sub },
     });
@@ -22,12 +35,10 @@ export async function POST() {
       return unauthorized("Session expired or revoked");
     }
 
-    // Fetch the user to build the access token payload
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
       select: { id: true, role: true, branchId: true, name: true, isActive: true, deletedAt: true },
     });
-
     if (!user || !user.isActive || user.deletedAt) {
       return unauthorized("Account is inactive");
     }
@@ -38,6 +49,25 @@ export async function POST() {
       branchId: user.branchId,
       name: user.name,
     });
+
+    // Mobile flow: also issue a fresh refresh token and rotate the session row
+    // so long-lived clients keep sliding their refresh window.
+    if (headerRefresh) {
+      const newRefresh = await signRefreshToken(user.id);
+      await prisma.session.update({
+        where: { id: session.id },
+        data: {
+          refreshToken: newRefresh,
+          expiresAt: new Date(Date.now() + TOKEN_TTL.refresh * 1000),
+        },
+      });
+      return ok({
+        tokens: {
+          access: accessToken,
+          refresh: newRefresh,
+        },
+      });
+    }
 
     const res = ok({ success: true });
     res.cookies.set(COOKIE_NAMES.access, accessToken, {

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth/session";
-import { Sidebar } from "@/components/layout/sidebar";
+import { LayoutShell } from "@/components/layout/layout-shell";
 import { Topbar } from "@/components/layout/topbar";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -17,12 +17,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (user.role === "EMPLOYEE") redirect("/employee/dashboard");
 
   return (
-    <div className="min-h-screen bg-background md:pl-64">
-      <Sidebar variant="admin" />
-      <div className="flex min-h-screen flex-col">
-        <Topbar user={user} title="Admin Panel" variant="admin" />
-        <main className="flex-1 p-4 md:p-6 lg:p-8">{children}</main>
-      </div>
-    </div>
+    <LayoutShell
+      variant="admin"
+      role={user.role}
+      topbar={<Topbar user={user} title="Admin Panel" variant="admin" />}
+    >
+      {children}
+    </LayoutShell>
   );
 }

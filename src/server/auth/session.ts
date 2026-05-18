@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { COOKIE_NAMES } from "@/lib/constants";
 import { signAccessToken, signRefreshToken, TOKEN_TTL, verifyAccessToken } from "./jwt";
@@ -67,8 +67,12 @@ export async function createSession(user: User, meta: { ip?: string; userAgent?:
 }
 
 export async function destroySession() {
+  // Read the refresh token from the cookie (web flow) or the X-Refresh-Token
+  // header (mobile / Bearer flow), so logout revokes the server-side session
+  // in either case.
   const cookieStore = cookies();
-  const refresh = cookieStore.get(COOKIE_NAMES.refresh)?.value;
+  const headerRefresh = headers().get("x-refresh-token");
+  const refresh = cookieStore.get(COOKIE_NAMES.refresh)?.value || headerRefresh;
   if (refresh) {
     await prisma.session
       .deleteMany({ where: { refreshToken: refresh } })
@@ -76,8 +80,16 @@ export async function destroySession() {
   }
 }
 
+function getAccessToken(): string | null {
+  const cookieToken = cookies().get(COOKIE_NAMES.access)?.value;
+  if (cookieToken) return cookieToken;
+  const authHeader = headers().get("authorization");
+  if (authHeader?.startsWith("Bearer ")) return authHeader.slice("Bearer ".length);
+  return null;
+}
+
 export async function getCurrentUser(): Promise<CurrentUser | null> {
-  const token = cookies().get(COOKIE_NAMES.access)?.value;
+  const token = getAccessToken();
   if (!token) return null;
 
   const payload = await verifyAccessToken(token);

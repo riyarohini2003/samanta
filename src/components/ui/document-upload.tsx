@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Upload, X, FileText, Loader2, Camera } from "lucide-react";
+import { Upload, X, FileText, Loader2, Camera, Crop } from "lucide-react";
+import { ImageCropper } from "@/components/ui/image-cropper";
 
 export type UploadedDoc = {
   type: string;
@@ -35,9 +36,13 @@ export function DocumentSlot({
   const streamRef = useRef<MediaStream | null>(null);
   const [uploading, setUploading] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [editSrc, setEditSrc] = useState<string | null>(null);
 
   useEffect(() => {
-    return () => stopStream();
+    return () => {
+      stopStream();
+      if (editSrc) URL.revokeObjectURL(editSrc);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -87,14 +92,38 @@ export function DocumentSlot({
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, w, h);
     canvas.toBlob(
-      async (blob) => {
+      (blob) => {
         if (!blob) return;
-        await uploadBlob(blob, `${type.toLowerCase()}_capture.jpg`);
-        closeCamera();
+        stopStream();
+        setCameraOpen(false);
+        setEditSrc(URL.createObjectURL(blob));
       },
       "image/jpeg",
-      0.9
+      0.92
     );
+  }
+
+  async function handleCropDone(blob: Blob) {
+    const url = editSrc;
+    setEditSrc(null);
+    if (url) URL.revokeObjectURL(url);
+    await uploadBlob(blob, `${type.toLowerCase()}_capture.jpg`);
+  }
+
+  function handleCropCancel() {
+    if (editSrc) URL.revokeObjectURL(editSrc);
+    setEditSrc(null);
+  }
+
+  async function editExisting() {
+    if (!value?.url) return;
+    try {
+      const res = await fetch(value.url);
+      const blob = await res.blob();
+      setEditSrc(URL.createObjectURL(blob));
+    } catch {
+      toast.error("Could not load image for editing");
+    }
   }
 
   async function uploadBlob(blob: Blob, filename: string) {
@@ -143,7 +172,13 @@ export function DocumentSlot({
   return (
     <div className="rounded-md border p-3">
       <div className="mb-2 text-sm font-medium">{label}</div>
-      {value ? (
+      {editSrc ? (
+        <ImageCropper
+          src={editSrc}
+          onCrop={handleCropDone}
+          onCancel={handleCropCancel}
+        />
+      ) : value ? (
         <div className="flex items-start gap-3">
           {isImage ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -168,6 +203,17 @@ export function DocumentSlot({
               View
             </a>
           </div>
+          {isImage && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={editExisting}
+              title="Edit / crop"
+            >
+              <Crop className="h-4 w-4" />
+            </Button>
+          )}
           <Button
             type="button"
             variant="ghost"

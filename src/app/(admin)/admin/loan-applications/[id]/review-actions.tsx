@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Check, X, Send } from "lucide-react";
 
@@ -25,6 +26,7 @@ export function ReviewActions({
   const [remark, setRemark] = useState("");
   const [assignedId, setAssignedId] = useState(employees[0]?.id ?? "");
   const [mode, setMode] = useState<"CASH" | "BANK" | "UPI" | "CHEQUE">("CASH");
+  const [firstDueDate, setFirstDueDate] = useState("");
 
   async function call(path: string, body: unknown, key: string, successMsg: string) {
     setLoading(key);
@@ -79,13 +81,29 @@ export function ReviewActions({
                 <option value="CHEQUE">Cheque</option>
               </Select>
             </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>First Collection Date</Label>
+              <Input
+                type="date"
+                value={firstDueDate}
+                min={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setFirstDueDate(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave empty to start the repayment schedule from the disbursement date.
+              </p>
+            </div>
           </div>
           <Button
             disabled={loading !== null || !assignedId}
             onClick={() =>
               call(
                 `/api/v1/loan-applications/${appId}/disburse`,
-                { assignedEmployeeId: assignedId, disbursementMode: mode },
+                {
+                  assignedEmployeeId: assignedId,
+                  disbursementMode: mode,
+                  ...(firstDueDate ? { firstDueDate } : {}),
+                },
                 "disburse",
                 "Loan disbursed. Repayment schedule generated."
               )

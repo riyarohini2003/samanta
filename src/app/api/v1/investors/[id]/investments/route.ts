@@ -1,11 +1,12 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/server/db";
 import { requireRole, AuthError } from "@/server/auth/session";
-import { investmentCreateSchema, investmentUpdateSchema } from "@/lib/zod-schemas/investment";
+import { investmentCreateSchema } from "@/lib/zod-schemas/investment";
 import { ok, created, handleError, notFound, unauthorized, forbidden } from "@/lib/api";
 import { nextInvestmentCode } from "@/server/counters";
 import { writeAudit, getRequestMeta } from "@/server/audit";
 import dayjs from "@/lib/dayjs";
+import { buildInvestmentSchedule } from "@/server/services/investment-payouts";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -32,13 +33,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!investor) return notFound("Investor not found");
 
     const code = await nextInvestmentCode();
-    const investmentDate = dayjs.utc(body.investmentDate).toDate();
-    const maturityDate = dayjs.utc(body.investmentDate).add(body.tenureMonths, "month").toDate();
+    const investmentDate = dayjs.utc(body.investmentDate).startOf("day").toDate();
 
-    // Simple interest: I = P * R/100 * T(years)
-    const tenureYears = body.tenureMonths / 12;
-    const interestAmount = Math.round(body.principalAmount * (body.interestRate / 100) * tenureYears * 100) / 100;
-    const totalReturn = Math.round((body.principalAmount + interestAmount) * 100) / 100;
+    const schedule = buildInvestmentSchedule({
+      principalAmount: body.principalAmount,
+      interestRate: body.interestRate,
+      tenureMonths: body.tenureMonths,
+      investmentDate,
+      payoutMode: body.payoutMode,
+      customPayouts: body.customPayouts,
+    });
 
     const investment = await prisma.investment.create({
       data: {
@@ -48,10 +52,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         interestRate: body.interestRate,
         tenureMonths: body.tenureMonths,
         investmentDate,
-        maturityDate,
-        interestAmount,
-        totalReturn,
+        maturityDate: schedule.maturityDate,
+        interestAmount: schedule.interestAmount,
+        totalReturn: schedule.totalReturn,
+        payoutMode: body.payoutMode,
+        agreementDate: body.agreementDate ? dayjs.utc(body.agreementDate).toDate() : null,
         notes: body.notes ?? null,
+        payouts: {
+          create: schedule.payouts.map((p) => ({
+            payoutNo: p.payoutNo,
+            dueDate: p.dueDate,
+            principalDue: p.principalDue,
+            interestDue: p.interestDue,
+            totalDue: p.totalDue,
+          })),
+        },
       },
     });
 

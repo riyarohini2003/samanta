@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const parsed = dueListQuerySchema.parse({
       date: searchParams.get("date") ?? new Date().toISOString().slice(0, 10),
+      dateTo: searchParams.get("dateTo") ?? undefined,
       branchId: searchParams.get("branchId") ?? undefined,
       employeeId: searchParams.get("employeeId") ?? undefined,
       loanType: searchParams.get("loanType") ?? undefined,

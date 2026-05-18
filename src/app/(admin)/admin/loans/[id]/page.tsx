@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/server/db";
+import { getCurrentUser } from "@/server/auth/session";
+import { isAdmin } from "@/server/auth/guards";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/badge";
+import { IglBadge } from "@/components/ui/igl-badge";
+import { getLoanSerial } from "@/server/services/igl-serial";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pencil } from "lucide-react";
 import { fmtDate, fmtDateTime } from "@/lib/dayjs";
 import { formatMoney } from "@/lib/formatters";
 import RepaymentSchedule from "./repayment-schedule";
@@ -14,6 +19,8 @@ import { LoanCloseButton } from "@/components/ui/loan-close-dialog";
 export const dynamic = "force-dynamic";
 
 export default async function LoanDetailPage({ params }: { params: { id: string } }) {
+  const me = await getCurrentUser();
+  const canEdit = me ? isAdmin(me) : false;
   const loan = await prisma.loanAccount.findUnique({
     where: { id: params.id },
     include: {
@@ -26,13 +33,27 @@ export default async function LoanDetailPage({ params }: { params: { id: string 
   });
   if (!loan) notFound();
 
+  const iglSerial = await getLoanSerial(loan.id);
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title={loan.accountNo}
+        title={
+          <span className="inline-flex items-center gap-2">
+            {loan.accountNo}
+            <IglBadge serial={iglSerial} />
+          </span>
+        }
         description={`${loan.customer.fullName} · ${loan.loanType} · ${loan.branch.name}`}
         actions={
           <div className="flex gap-2">
+            {canEdit && (
+              <Button asChild variant="outline">
+                <Link href={`/admin/loans/${loan.id}/edit`}>
+                  <Pencil className="h-4 w-4" /> Edit
+                </Link>
+              </Button>
+            )}
             <LoanCloseButton loanId={loan.id} pendingAmount={Number(loan.pendingAmount)} loanStatus={loan.status} />
             <Button asChild variant="outline"><Link href="/admin/loans">Back</Link></Button>
           </div>

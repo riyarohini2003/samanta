@@ -16,6 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       assignedEmployeeId: body.assignedEmployeeId,
       disbursementMode: body.disbursementMode,
       disbursedAt: body.disbursedAt ? new Date(body.disbursedAt) : undefined,
+      firstDueDate: body.firstDueDate ? new Date(body.firstDueDate) : undefined,
       actorUserId: me.id,
       ip: meta.ip,
       userAgent: meta.userAgent,

@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus } from "lucide-react";
+import { getApplicationSerialMap } from "@/server/services/igl-serial";
 import ApplicationsTable from "./applications-table";
 
 export const dynamic = "force-dynamic";
@@ -15,11 +16,17 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
     orderBy: { createdAt: "desc" },
     take: 200,
     include: {
-      customer: { select: { customerCode: true, fullName: true, mobile: true } },
+      customer: { select: { id: true, customerCode: true, fullName: true, mobile: true } },
       branch: { select: { code: true, name: true } },
       createdBy: { select: { name: true } },
     },
   });
+
+  const serials = await getApplicationSerialMap(apps.map((a) => a.id));
+  const appsWithSerial = apps.map((a) => ({
+    ...a,
+    iglSerial: serials.get(a.id) ?? 0,
+  }));
 
   const tabs = [
     { label: "All", value: "" },
@@ -66,7 +73,7 @@ export default async function ApplicationsPage({ searchParams }: { searchParams:
 
       <Card>
         <CardContent className="p-4">
-          <ApplicationsTable apps={apps} />
+          <ApplicationsTable apps={appsWithSerial} />
         </CardContent>
       </Card>
     </div>
