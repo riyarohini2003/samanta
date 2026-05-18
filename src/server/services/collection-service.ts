@@ -55,7 +55,7 @@ export async function getDueList(params: {
 
   const loanWhere: Prisma.LoanAccountWhereInput = {
     ...loanScopeWhere(params.user),
-    status: { in: ["ACTIVE", "OVERDUE"] },
+    status: { in: ["ACTIVE", "OVERDUE", "CLOSED"] },
     ...(params.branchId ? { branchId: params.branchId } : {}),
     ...(params.employeeId ? { assignedEmployeeId: params.employeeId } : {}),
     ...(params.loanType ? { loanType: params.loanType } : {}),
@@ -131,7 +131,7 @@ export async function getDueSummary(params: {
 
   const loanWhere: Prisma.LoanAccountWhereInput = {
     ...loanScopeWhere(params.user),
-    status: { in: ["ACTIVE", "OVERDUE"] },
+    status: { in: ["ACTIVE", "OVERDUE", "CLOSED"] },
     ...(params.branchId ? { branchId: params.branchId } : {}),
     ...(params.employeeId ? { assignedEmployeeId: params.employeeId } : {}),
     ...(params.loanType ? { loanType: params.loanType } : {}),
@@ -440,6 +440,220 @@ export async function recordPayment(params: {
     });
 
     return { payment, duplicate: false };
+  });
+}
+
+/**
+ * Edit an existing payment. Updates the payment row, then rebuilds the parent
+ * loan's schedule + totals + status by replaying every non-reversed payment
+ * chronologically — this keeps state consistent even when the original payment
+ * was distributed across multiple installments.
+ */
+export async function updatePayment(params: {
+  user: CurrentUser;
+  paymentId: string;
+  amount: number;
+  penalty: number;
+  mode: PaymentMode;
+  note?: string | null;
+  collectedAt?: Date;
+  ip?: string | null;
+  userAgent?: string | null;
+}) {
+  return prisma.$transaction(
+    async (tx) => {
+      const existing = await tx.payment.findUnique({
+        where: { id: params.paymentId },
+        include: { loanAccount: true },
+      });
+      if (!existing) throw new Error("Payment not found");
+
+      const loan = await tx.loanAccount.findFirst({
+        where: { id: existing.loanAccountId, ...loanScopeWhere(params.user) },
+      });
+      if (!loan) throw new Error("Loan not found");
+
+      const before = {
+        amount: toNumber(existing.amount),
+        penalty: toNumber(existing.penalty),
+        mode: existing.mode,
+        note: existing.note,
+        collectedAt: existing.collectedAt,
+      };
+
+      const updated = await tx.payment.update({
+        where: { id: existing.id },
+        data: {
+          amount: params.amount,
+          penalty: params.penalty,
+          mode: params.mode,
+          note: params.note ?? null,
+          collectedAt: params.collectedAt ?? existing.collectedAt,
+        },
+      });
+
+      await rebuildLoanState(tx, loan.id);
+
+      await tx.auditLog.create({
+        data: {
+          userId: params.user.id,
+          action: "PAYMENT_EDITED",
+          entityType: "Payment",
+          entityId: existing.id,
+          before,
+          after: {
+            amount: params.amount,
+            penalty: params.penalty,
+            mode: params.mode,
+            note: params.note ?? null,
+            collectedAt: params.collectedAt ?? existing.collectedAt,
+          },
+          ip: params.ip ?? null,
+          userAgent: params.userAgent ?? null,
+        },
+      });
+
+      return updated;
+    },
+    { maxWait: 10_000, timeout: 60_000 }
+  );
+}
+
+/**
+ * Recompute the entire loan's schedule + totals + status from the canonical
+ * list of non-reversed payments. Used after editing a payment so distributions
+ * across multiple installments stay correct.
+ */
+async function rebuildLoanState(
+  tx: Prisma.TransactionClient,
+  loanAccountId: string
+) {
+  const loan = await tx.loanAccount.findUnique({
+    where: { id: loanAccountId },
+    include: {
+      schedule: { orderBy: { installmentNo: "asc" } },
+      payments: { where: { isReversed: false }, orderBy: { collectedAt: "asc" } },
+    },
+  });
+  if (!loan) throw new Error("Loan not found");
+
+  // Reset schedule rows (preserve SKIPPED)
+  const today = toDateOnly(new Date());
+  const scheduleState = loan.schedule.map((s) => ({
+    id: s.id,
+    dueDate: s.dueDate,
+    dueAmount: toNumber(s.dueAmount),
+    paidAmount: 0,
+    status: s.status === "SKIPPED" ? "SKIPPED" : "PENDING",
+    paidAt: null as Date | null,
+  }));
+
+  // Replay payments chronologically using the same distribution rules as recordPayment
+  let totalPaid = 0;
+  let totalPenalty = 0;
+  for (const p of loan.payments) {
+    let remaining = Math.round(toNumber(p.amount) * 100) / 100;
+    totalPaid += toNumber(p.amount);
+    totalPenalty += toNumber(p.penalty);
+
+    const applyTo = (row: (typeof scheduleState)[number]) => {
+      if (row.status === "SKIPPED" || row.status === "PAID") return;
+      const outstanding = row.dueAmount - row.paidAmount;
+      if (outstanding <= 0) return;
+      const apply = Math.min(remaining, outstanding);
+      row.paidAmount += apply;
+      remaining -= apply;
+      if (row.paidAmount >= row.dueAmount - 0.009) {
+        row.status = "PAID";
+        row.paidAt = p.collectedAt;
+      } else {
+        row.status = "PARTIAL";
+      }
+    };
+
+    if (p.scheduleId) {
+      const target = scheduleState.find((s) => s.id === p.scheduleId);
+      if (target) applyTo(target);
+    }
+    for (const s of scheduleState) {
+      if (remaining <= 0) break;
+      if (s.id === p.scheduleId) continue;
+      applyTo(s);
+    }
+  }
+
+  // Mark remaining unpaid installments past today as MISSED
+  for (const s of scheduleState) {
+    if (s.status === "PENDING" && s.dueDate < today) {
+      s.status = "MISSED";
+    }
+  }
+
+  // Persist schedule changes (parallel writes to keep the transaction short)
+  const originalById = new Map(loan.schedule.map((o) => [o.id, o] as const));
+  const dirty = scheduleState.filter((s) => {
+    const original = originalById.get(s.id)!;
+    return (
+      toNumber(original.paidAmount) !== s.paidAmount ||
+      original.status !== s.status ||
+      (original.paidAt?.getTime() ?? null) !== (s.paidAt?.getTime() ?? null)
+    );
+  });
+  await Promise.all(
+    dirty.map((s) =>
+      tx.repaymentSchedule.update({
+        where: { id: s.id },
+        data: {
+          paidAmount: s.paidAmount,
+          status: s.status as any,
+          paidAt: s.paidAt,
+        },
+      })
+    )
+  );
+
+  const newPending = Math.max(toNumber(loan.totalPayable) - totalPaid, 0);
+  const nextUnpaid = scheduleState
+    .filter((s) => s.status === "PENDING" || s.status === "PARTIAL" || s.status === "MISSED")
+    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())[0];
+
+  // Recompute overdue amount from current schedule state
+  const overdueAmount = scheduleState.reduce((sum, s) => {
+    if ((s.status === "MISSED" || s.status === "PARTIAL") && s.dueDate < today) {
+      return sum + Math.max(s.dueAmount - s.paidAmount, 0);
+    }
+    return sum;
+  }, 0);
+
+  let status: "ACTIVE" | "CLOSED" | "OVERDUE";
+  if (newPending <= 0.009) {
+    status = "CLOSED";
+  } else if (overdueAmount > 0) {
+    status = "OVERDUE";
+  } else {
+    status = "ACTIVE";
+  }
+
+  // Preserve manual closures (WRITTEN_OFF) and the existing closedAt if already closed
+  const preservedStatus =
+    loan.status === "WRITTEN_OFF" ? "WRITTEN_OFF" : status;
+
+  await tx.loanAccount.update({
+    where: { id: loan.id },
+    data: {
+      paidAmount: totalPaid,
+      pendingAmount: newPending,
+      penaltyAmount: totalPenalty,
+      overdueAmount,
+      nextDueDate: nextUnpaid?.dueDate ?? null,
+      status: preservedStatus,
+      closedAt:
+        preservedStatus === "CLOSED"
+          ? loan.closedAt ?? new Date()
+          : preservedStatus === "WRITTEN_OFF"
+          ? loan.closedAt
+          : null,
+    },
   });
 }
 
